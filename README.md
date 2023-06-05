@@ -1,1 +1,1 @@
-# FuzzyActorCritic
+# Anchored Actor Critic
