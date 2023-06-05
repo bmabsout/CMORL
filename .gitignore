@@ -1,7 +1,4 @@
-actor/
-critic/
-seeds/
-hypers.json
+experiments/
 *.p
 *.pb
 # Byte-compiled / optimized / DLL files
