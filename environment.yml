@@ -1,0 +1,16 @@
+name: anchored_rl_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - conda-forge:pybullet
+  - pygame
+  - tensorflow
+  - scipy
+  - gymnasium
+  - matplotlib
+  - numpy
+  - pip
+  - pip:
+     - -e .
