@@ -3,24 +3,24 @@ import json
 import os
 import time
 import pickle
-from spinup.utils.args_utils import Arg_Serializer, Serialized_Argument
-from spinup.utils import train_utils, save_utils, args_utils
+from anchored_rl.rl_algs.ddpg.ddpg import ddpg, HyperParams
+from anchored_rl.utils import args_utils
+from anchored_rl.utils import train_utils
+import reacher
 
-
-reacher_serializer = Arg_Serializer(
+reacher_serializer = args_utils.Arg_Serializer(
     abbrev_to_args= {
-        'd': Serialized_Argument(name='--distance', type=float, default=0.2, help='radius of points from the center'),
-        'b': Serialized_Argument(name='--bias', type=float, default=0.0, help='bias of points from the center'),
+        'd': args_utils.Serialized_Argument(name='--distance', type=float, default=0.2, help='radius of points from the center'),
+        'b': args_utils.Serialized_Argument(name='--bias', type=float, default=0.0, help='bias of points from the center'),
     }
 )
 
 
-def train_reacher(cmd_args):
-    import spinup.algos.ddpg.ddpg as rl_alg
-    import reacher
-    import tensorflow as tf
 
-    hp = rl_alg.HyperParams(
+def parse_args_and_train(args=None):
+    serializer = args_utils.Arg_Serializer.join(args_utils.default_serializer(), reacher_serializer)
+    cmd_args = args_utils.parse_arguments(serializer)
+    hp = HyperParams(
         seed=cmd_args.seed,
         steps_per_epoch=1000,
         ac_kwargs={
@@ -28,8 +28,6 @@ def train_reacher(cmd_args):
             "critic_hidden_sizes": (256, 256),
             "obs_normalizer": [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 4.0, 4.0, 2.0, 2.0, 2.0]
         },
-        pi_bar_variance=[0.0, 0.0, 0.0, 0.0,
-                         0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
         start_steps=1000,
         replay_size=int(1e5),
         gamma=0.9,
@@ -45,10 +43,9 @@ def train_reacher(cmd_args):
         train_every=50,
         train_steps=30,
     )
+    generated_params = train_utils.create_train_folder_and_params("Reacher-custom", hp, cmd_args, serializer)
+    env_fn = lambda: reacher.ReacherEnv(goal_distance=cmd_args.distance, bias=cmd_args.bias)
+    ddpg(env_fn, **generated_params)
 
-    save_path = train_utils.save_hypers(hp, cmd_args, reacher_serializer)
-    train_utils.build_training_params(hyperparams, args= None, reacher_serializer):
-
-
-if __name__ == "__main__":
-    train_reacher(args_utils.parse_arguments(None, reacher_serializer)
+if __name__ == '__main__':
+    parse_args_and_train()

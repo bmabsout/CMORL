@@ -67,7 +67,6 @@ class HyperParams:
         self.ac_kwargs = ac_kwargs
         self.seed = seed
         self.steps_per_epoch = steps_per_epoch
-        self.pi_bar_variance = pi_bar_variance
         self.epochs = epochs
         self.replay_size = replay_size
         self.gamma = gamma
@@ -308,7 +307,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
 
     start_time = time.time()
     o, _ = env.reset()
-    r, d, ep_ret, ep_len = 0.0, False, 0.0, 0
+    d, ep_ret, ep_len = False, 0.0, 0
     total_steps = hp.steps_per_epoch * hp.epochs
 
     # Main loop: collect experience in env and update/log each epoch
@@ -326,7 +325,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
 
         # Step the env
         o2, r, d, _, _ = env.step(a)
-        ep_ret += r
+        ep_ret += float(r)
         ep_len += 1
 
         # Ignore the "done" signal if it comes from hitting the time
@@ -423,26 +422,20 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             # logger.log_tabular('LossAQ', average_only=True)
 
             logger.dump_tabular()
-    return pi_network    
+    return pi_network
 
-
+def parse_args_and_train(args=None):
+    import anchored_rl.utils.train_utils as train_utils
+    import anchored_rl.utils.args_utils as args_utils
+    serializer = args_utils.Arg_Serializer.join(
+        args_utils.Arg_Serializer({'g': args_utils.Serialized_Argument(name='--gym_env', type=str, required=True)}, ignored={'gym_env'}),
+        args_utils.default_serializer())
+    cmd_args = args_utils.parse_arguments(serializer)
+    hp = HyperParams(q_lr=cmd_args.learning_rate, pi_lr=cmd_args.learning_rate, seed=cmd_args.seed)
+    generated_params = train_utils.create_train_folder_and_params(hp, cmd_args, serializer)
+    env_fn = lambda : gym.make(cmd_args.gym_env)
+    ddpg(env_fn, **generated_params)
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='HalfCheetah-v2')
-    parser.add_argument('--hid', type=int, default=300)
-    parser.add_argument('--l', type=int, default=2)
-    parser.add_argument('--gamma', type=float, default=0.99)
-    parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--epochs', type=int, default=50)
-    parser.add_argument('--exp_name', type=str, default='ddpg')
-    args = parser.parse_args()
-
-    from spinup.utils.run_utils import setup_logger_kwargs
-    logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
-
-    ddpg(lambda : gym.make(args.env), actor_critic=core.mlp_actor_critic,
-         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),
-         gamma=args.gamma, seed=args.seed, epochs=args.epochs,
-         logger_kwargs=logger_kwargs)
+    parse_args_and_train()
+    

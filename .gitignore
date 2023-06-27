@@ -1,4 +1,5 @@
 experiments/
+trained/
 MUJOCO_LOG.TXT
 *.p
 *.pb

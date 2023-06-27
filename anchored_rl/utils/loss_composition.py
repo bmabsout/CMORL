@@ -53,7 +53,7 @@ def scale_gradient(x, scale):
 
 @tf.custom_gradient
 def move_toward_zero(x):
-    #compute gradient with respect x**2
+    #tweaked to be a good activity regularizer for tanh within the dfl framework
     def grad(dy):
-        return dy*-x
+        return -dy*x*x*x/10.0
     return tf.sigmoid(-2*tf.abs(x)+5), grad

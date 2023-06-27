@@ -56,9 +56,9 @@ def many_fine_tunes(anchored = True):
 
 def train_many_full_circles():
     for i in range(6):
-        train_reacher.train_reacher(train_reacher.parse_arguments(["reacher", "-r"]))
+        train_reacher.parse_args_and_train(["reacher", "-r"])
 
 
 if __name__ == "__main__":
-    many_fine_tunes(anchored = False)
-    # train_many_full_circles()
+    # many_fine_tunes(anchored = False)
+    train_many_full_circles()

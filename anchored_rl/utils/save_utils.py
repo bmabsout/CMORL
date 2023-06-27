@@ -9,12 +9,12 @@ from pathlib import Path
 from functools import partial
 
 
-def save_hypers(hypers, cmd_args, serializer:Arg_Serializer):
+def save_hypers(experiment_name, hypers, cmd_args, serializer:Arg_Serializer):
     """ Saves the hyperparameters to a json file in the experiment folder. Uses semantic naming for the folder."""
     all_hypers = {**vars(cmd_args), **vars(hypers)}
 
-    save_path = Path(serializer.get_seed_folder_path(all_hypers), "epochs")
-    common_output_path = Path(cmd_args.experiment_name, serializer.get_semantic_folder_name(all_hypers))
+    save_path = Path(serializer.get_seed_folder_path(experiment_name, all_hypers), "epochs")
+    common_output_path = Path("trained", experiment_name, serializer.get_semantic_folder_name(all_hypers))
     os.makedirs(common_output_path, exist_ok=True)
     with open(f"{common_output_path}/hypers.json", "w") as f:
         json.dump(serializer.remove_ignored(all_hypers), f, indent=4)
@@ -48,21 +48,6 @@ def latest_train_folder(path):
 
 def concatenate_lists(list_of_lists):
     return [item for sublist in list_of_lists for item in sublist]
-
-def folder_to_results(render, distance, bias, num_tests, folder_path, **kwargs):
-    import tensorflow as tf
-    import reacher
-    saved = tf.saved_model.load(Path(folder_path, actor))
-    def actor(x): return saved(np.array([x], dtype=np.float32))[0]
-    env = reacher.ReacherEnv(
-        render_mode="human" if render else None,
-        goal_distance=distance,
-        bias=bias
-    )
-    runs = np.array(list(map(lambda i: test(actor, env, seed=17+i,
-                    render=False)[1], range(num_tests))))
-    return runs
-
 
 
 def on_save(actor: Model, q_network: Model, epoch:int, replay_buffer, replay_save:bool, save_path:str):

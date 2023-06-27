@@ -4,12 +4,12 @@ from anchored_rl.utils.args_utils import Arg_Serializer
 
 
 
-def create_train_folder_and_params(hyperparams, cmd_args, serializer: Arg_Serializer):
+def create_train_folder_and_params(experiment_name, hyperparams, cmd_args, serializer: Arg_Serializer):
     """
     Sets up the folders for the experiment and trains the agent.
     """
     # Create the folders
-    save_path = save_utils.save_hypers(hyperparams, cmd_args, serializer)
+    save_path = save_utils.save_hypers(experiment_name, hyperparams, cmd_args, serializer)
     generated_params = {
         "hp": hyperparams,
         "on_save": partial(save_utils.on_save, replay_save=cmd_args.replay_save, save_path=save_path),
@@ -25,4 +25,3 @@ def create_train_folder_and_params(hyperparams, cmd_args, serializer: Arg_Serial
         generated_params["anchored"] = lambda: (save_utils.load_critic(cmd_args.prev_folder), save_utils.load_replay(cmd_args.prev_folder.parent))
 
     return generated_params
-
