@@ -1,5 +1,6 @@
 import argparse
 import train_reacher
+from anchored_rl.utils import args_utils
 
 # options = ['DIAMETER', '']
 # def parse_arguments(args=None):
@@ -27,7 +28,7 @@ def train_shrinking_circle():
 
 def fine_tune(anchored = False):
     for i in range(6):
-        cmd_args = train_reacher.parse_arguments([
+        cmd_args = train_reacher.parse_args([
             "reacher",
             "--epochs", "10",
             "--distance", f"{0.2*((i+1.0)/6.0)}",
@@ -35,22 +36,16 @@ def fine_tune(anchored = False):
         ])
         cmd_args.anchored = anchored
         print(cmd_args)
-        train_reacher.train_reacher(cmd_args)
+        train_reacher.train(cmd_args)
 
 def many_fine_tunes(anchored = True):
     parser = argparse.ArgumentParser()
     parser.add_argument('folders', nargs="+", type=str, help='location of training runs to fine tune')
-    cmd_args = parser.parse_args()
-    for folder in cmd_args.folders:
-        parsed_args = train_reacher.parse_arguments([
-            "reacher",
-            "--epochs", "10",
-            "--distance", "0.1",
-            "--prev_folder", folder,
-        ])
-        parsed_args.anchored = anchored
-        print(parsed_args)
-        train_reacher.train_reacher(parsed_args)
+    serializer = args_utils.Arg_Serializer.join(args_utils.default_serializer(), reacher_serializer)
+    cmd_args = args_utils.parse_arguments(serializer)
+    for folder in md_args.folders:
+        cmd_args.prev_folder = folder
+        train_reacher.train(cmd_args)
 
 
 
@@ -60,5 +55,5 @@ def train_many_full_circles():
 
 
 if __name__ == "__main__":
-    # many_fine_tunes(anchored = False)
-    train_many_full_circles()
+    many_fine_tunes(anchored = False)
+    # train_many_full_circles()

@@ -15,11 +15,12 @@ reacher_serializer = args_utils.Arg_Serializer(
     }
 )
 
-
-
-def parse_args_and_train(args=None):
+def parse_args(args=None):
     serializer = args_utils.Arg_Serializer.join(args_utils.default_serializer(), reacher_serializer)
-    cmd_args = args_utils.parse_arguments(serializer)
+    return args_utils.parse_arguments(serializer)
+
+
+def train(cmd_args):    
     hp = HyperParams(
         seed=cmd_args.seed,
         steps_per_epoch=1000,
@@ -48,4 +49,4 @@ def parse_args_and_train(args=None):
     ddpg(env_fn, **generated_params)
 
 if __name__ == '__main__':
-    parse_args_and_train()
+    train(parse_args())
