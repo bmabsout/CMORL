@@ -5,11 +5,14 @@ import hashlib
 import base64
 from typing import Any
 import copy
+from pathlib import Path
 
 class ExtraTypesEncoder(JSONEncoder):
     def default(self, obj):
         if isinstance(obj, numpy.ndarray):
             return obj.tolist()
+        if isinstance(obj, Path):
+            return str(obj)
         if callable(obj):
             return str(obj)
         return JSONEncoder.default(self, obj)
@@ -26,6 +29,8 @@ def serialize_leaf(o: Any) -> str:
         return hash_it(json.dumps(o, sort_keys=True, cls=ExtraTypesEncoder))
     elif type(o) == str:
         return hash_it(o, length=7)
+    if isinstance(o, Path):
+        return hash_it(str(o), length=7)
     elif type(o) == float:
         return format(o, ".4g")
     else:

@@ -93,8 +93,9 @@ def default_serializer():
         # ArgsSerializer({'n': Serialized_Argument(name='--experiment_name', type=str, required=True)}, ignored={'experiment_name'}),
         rl_alg_serializer(), anchor_serializer())
 
-def parse_arguments(serializer:Arg_Serializer, args=None):
-    parser = argparse.ArgumentParser()
+def parse_arguments(serializer:Arg_Serializer, args=None, parser = None):
+    if parser is None:
+        parser = argparse.ArgumentParser()
     serializer.add_serialized_args_to_parser(parser)
 
     cmd_args = parser.parse_args(args)

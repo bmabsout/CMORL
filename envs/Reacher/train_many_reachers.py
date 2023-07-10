@@ -1,6 +1,7 @@
 import argparse
 import train_reacher
 from anchored_rl.utils import args_utils
+from pathlib import Path
 
 # options = ['DIAMETER', '']
 # def parse_arguments(args=None):
@@ -41,19 +42,25 @@ def fine_tune(anchored = False):
 def many_fine_tunes(anchored = True):
     parser = argparse.ArgumentParser()
     parser.add_argument('folders', nargs="+", type=str, help='location of training runs to fine tune')
-    serializer = args_utils.Arg_Serializer.join(args_utils.default_serializer(), reacher_serializer)
-    cmd_args = args_utils.parse_arguments(serializer)
-    for folder in md_args.folders:
-        cmd_args.prev_folder = folder
-        train_reacher.train(cmd_args)
+    serializer = train_reacher.reacher_serializer()
+    serializer.abbrev_to_args['e'] = args_utils.Serialized_Argument(name='--epochs', type=int, default=10)
+    serializer.abbrev_to_args['d'] = args_utils.Serialized_Argument(name='--distance', type=int, default=0.1)
+    serializer.abbrev_to_args['a'] = args_utils.Serialized_Argument(name='--anchored', action='store_true', default=anchored)
+    serializer.add_serialized_args_to_parser(parser)
+    cmd_args = parser.parse_args()
+    for folder in cmd_args.folders:
+        cmd_args.prev_folder = Path(folder)
+        train_reacher.train(cmd_args, serializer)
 
 
 
 def train_many_full_circles():
     for i in range(6):
-        train_reacher.parse_args_and_train(["reacher", "-r"])
+        serializer = train_reacher.reacher_serializer()
+        cmd_args = args_utils.parse_arguments(serializer, args=["-r"])
+        train_reacher.train(cmd_args, serializer)
 
 
 if __name__ == "__main__":
-    many_fine_tunes(anchored = False)
+    many_fine_tunes(anchored = True)
     # train_many_full_circles()

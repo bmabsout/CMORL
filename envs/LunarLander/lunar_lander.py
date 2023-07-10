@@ -11,7 +11,7 @@ from gymnasium import error, spaces
 from gymnasium.error import DependencyNotInstalled
 from gymnasium.utils import EzPickle, colorize
 from gymnasium.utils.step_api_compatibility import step_api_compatibility
-
+from anchored_rl.utils.loss_composition import p_mean
 
 try:
     import Box2D
@@ -56,6 +56,9 @@ MAIN_ENGINE_Y_LOCATION = (
 VIEWPORT_W = 600
 VIEWPORT_H = 400
 
+def normed_angular_distance(a, b):
+    diff = ( b - a + np.pi ) % (2 * np.pi) - np.pi
+    return  np.abs(diff + 2*np.pi if diff < -np.pi else diff)/np.pi
 
 class ContactDetector(contactListener):
     def __init__(self, env):
@@ -646,30 +649,23 @@ class LunarLander(gym.Env, EzPickle):
         assert len(state) == 8
 
         reward = 0
-        shaping = (
-            -100 * np.sqrt(state[0] * state[0] + state[1] * state[1])
-            - 100 * np.sqrt(state[2] * state[2] + state[3] * state[3])
-            - 100 * abs(state[4])
-            + 10 * state[6]
-            + 10 * state[7]
-        )  # And ten points for legs contact, the idea is if you
-        # lose contact again after landing, you get negative reward
-        if self.prev_shaping is not None:
-            reward = shaping - self.prev_shaping
-        self.prev_shaping = shaping
-
-        reward -= (
-            m_power * 0.30
-        )  # less fuel spent is better, about -30 for heuristic landing
-        reward -= s_power * 0.03
-
+        # np.sqrt(state[0]**2.0 + state[1]**2.0)/ np.sqrt(self.observation_space.high[0] * self.observation_space.high[0] + self.observation_space.high[1] * self.observation_space.high[1])
+        dist_x = np.clip((1.0 - np.abs(state[0])/self.observation_space.high[0]), 0.0, 1.0)**3.0
+        dist_y = np.clip((1.0 - np.abs(state[1])/self.observation_space.high[1]), 0.1, 1.0)
+        # dist_from_landing = (1.0 - np.linalg.norm(state[0:2])/np.linalg.norm(self.observation_space.high[0:2]))**2.0
+        speed = np.clip((1.0 - np.linalg.norm(state[2:4])/np.linalg.norm(self.observation_space.high[2:4])), 0.0, 1.0)
+        slow_near_ground = speed**(dist_y)
+        angle = (1.0 - normed_angular_distance(state[4], 0.0))**1.5
+        angular_velocity = np.clip(1.0 - np.abs(state[5])/np.abs(self.observation_space.high[5]), 0.0, 1.0)
+        touching_ground = 0.6 + min(state[6],state[7])*0.4
+        reward = p_mean(np.array([dist_x, dist_y, angle, angular_velocity, touching_ground, speed]), p=-1.0)[0]
+        # print("dist_x:", dist_x, "dist_y:", dist_y, "sng:", slow_near_ground, "angle:", angle, "touching_ground:", touching_ground, "reward:", reward)
+        # print("reward", reward)
         terminated = False
         if self.game_over or abs(state[0]) >= 1.0:
             terminated = True
-            reward = -100
-        if not self.lander.awake:
-            terminated = True
-            reward = +100
+        # if not self.lander.awake:
+        #     terminated = True
 
         if self.render_mode == "human":
             self.render()
@@ -890,5 +886,5 @@ class LunarLanderContinuous:
 
 
 if __name__ == "__main__":
-    env = gym.make("LunarLander-v2", render_mode="rgb_array")
+    env = LunarLander(render_mode="human", continuous=True)
     demo_heuristic_lander(env, render=True)
