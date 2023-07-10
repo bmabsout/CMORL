@@ -6,6 +6,7 @@ from tensorflow.keras import models, Model
 import pickle
 from anchored_rl.utils.args_utils import Arg_Serializer, Serialized_Argument
 from pathlib import Path
+from anchored_rl.utils.serialization_utils import ExtraTypesEncoder
 from functools import partial
 
 
@@ -17,7 +18,7 @@ def save_hypers(experiment_name, hypers, cmd_args, serializer:Arg_Serializer):
     common_output_path = Path("trained", experiment_name, serializer.get_semantic_folder_name(all_hypers))
     os.makedirs(common_output_path, exist_ok=True)
     with open(f"{common_output_path}/hypers.json", "w") as f:
-        json.dump(serializer.remove_ignored(all_hypers), f, indent=4)
+        json.dump(serializer.remove_ignored(all_hypers), f, indent=4, cls=ExtraTypesEncoder)
     return save_path
 
 
@@ -61,7 +62,7 @@ def load_critic(folder):
     return models.load_model(Path(folder, "critic"))
 
 def load_actor(folder):
-    return models.load_model(Path(folder, actor))
+    return models.load_model(Path(folder, "actor"))
 
 def load_replay(folder):
     return pickle.load(open(Path(folder, "replay.p"), "rb"))
