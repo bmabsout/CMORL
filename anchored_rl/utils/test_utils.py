@@ -23,8 +23,9 @@ def test(actor, env, seed=123, render=True, num_steps=100):
 
 def folder_to_results(env, render, num_tests, folder_path, steps=100,  **kwargs):
     import tensorflow as tf
-    saved = tf.saved_model.load(Path(folder_path, "actor"))
+    saved = tf.saved_model.load(str(Path(folder_path, "actor")))
     def actor(x):
+        # print(np.array([x], dtype=np.float32))
         return saved(np.array([x], dtype=np.float32))[0]
     runs = np.array(list(map(lambda i: test(actor, env, seed=17+i,
                     render=render, num_steps=steps)[1], range(num_tests))))
