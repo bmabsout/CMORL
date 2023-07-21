@@ -25,7 +25,7 @@ def train(cmd_args, serializer):
         },
         start_steps=1000,
         replay_size=int(1e5),
-        gamma=0.9,
+        gamma=0.95,
         polyak=0.995,
         # pi_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),
         # q_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),

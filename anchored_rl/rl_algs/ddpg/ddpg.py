@@ -219,7 +219,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             q = tf.squeeze(q_network(tf.concat([obs1, acts], axis=-1)), axis=1)
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = tf.squeeze(q_targ_network(tf.concat([obs2, pi_targ], axis=-1)), axis=1)
-            backup = tf.stop_gradient(rews/max_q_val + (1 - d)*hp.gamma * q_pi_targ)
+            backup = tf.stop_gradient(rews/max_q_val + (1 - dones)*hp.gamma * q_pi_targ)
             q_loss = tf.reduce_mean((q-backup)**2) #+ sum(q_network.losses)*0.1
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
@@ -232,7 +232,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             q = tf.squeeze(anchor_q(tf.concat([obs1, acts], axis=-1)), axis=1)
             pi_targ = pi_and_before_tanh(obs2)["pi"]
             q_pi_targ = tf.squeeze(anchor_targ_network(tf.concat([obs2, pi_targ], axis=-1)), axis=1)
-            backup = tf.stop_gradient(rews/max_q_val + (1 - d)*hp.gamma * q_pi_targ)
+            backup = tf.stop_gradient(rews/max_q_val + (1 - dones)*hp.gamma * q_pi_targ)
             q_loss = tf.reduce_mean((q-backup)**2) #+ sum(q_network.losses)*0.1
         grads = tape.gradient(q_loss, anchor_q.trainable_variables)
         grads_and_vars = zip(grads, anchor_q.trainable_variables)
@@ -246,9 +246,10 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             outputs = pi_and_before_tanh(obs1)
             pi = outputs['pi']
             before_tanh = outputs['before_tanh']
-            before_tanh_c = p_mean(tf.reshape(move_toward_zero(before_tanh), [1, -1]), 1.0)
-            q_c = tf.stack(
-                [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
+            before_tanh_c = p_mean(tf.reshape(move_toward_zero(before_tanh), [1, -1]), 0.0)**0.5
+            # q_c = tf.stack(
+            #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
+            q_c = p_mean(tf.squeeze(q_network(tf.concat([obs1, pi], axis=-1))), 1.0)
             # before_tanh_c = tf.stack([before_tanh])
             
             aq_c = tf.constant([1.0])
@@ -262,7 +263,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             # reg_c = tf.squeeze(p_mean(tf.stack([spatial_c, temporal_c, before_tanh_c],axis=1), 0.0))
             # all_c = p_mean(tf.stack([scale_gradient(tf.squeeze(aq_c), 3e2), tf.squeeze(before_tanh_c)]), p=0.0)
             # all_c = scale_gradient(aq_c,0.0)
-            all_c = p_mean(tf.stack([scale_gradient(tf.squeeze(q_c), 3e2), tf.squeeze(before_tanh_c)]), p=0.0)
+            all_c = p_mean(tf.stack([scale_gradient(tf.squeeze(q_c), 3e2), scale_gradient(tf.squeeze(before_tanh_c),0.1)]), p=0.0)
             # all_c = p_mean(tf.stack([ scale_gradient(aq_c, 3e2), scale_gradient(q_c, 3e2)], axis=1), 0.0)
             # all_c = q_c + 0.008*pi_diffs_c + 0.005*pi_bar_c + 0.025*center_c
             # if debug:
