@@ -20,12 +20,12 @@ def train(cmd_args, serializer):
         steps_per_epoch=1000,
         ac_kwargs={
             "actor_hidden_sizes": (32, 32),
-            "critic_hidden_sizes": (256, 256),
+            "critic_hidden_sizes": (512, 512),
             "obs_normalizer": lunar_lander.LunarLander().observation_space.high
         },
         start_steps=1000,
         replay_size=int(1e5),
-        gamma=0.95,
+        gamma=0.99,
         polyak=0.995,
         # pi_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),
         # q_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),

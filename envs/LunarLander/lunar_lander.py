@@ -664,7 +664,8 @@ class LunarLander(gym.Env, EzPickle):
         rw2 = p_mean(np.array([dist_x**2.0, dist_y**2.0, angle, touching_ground, speed**3.0]), p=0.0)[0]
         # reward = rw1*0.2 if dist_y < 0.5 else rw2
         # reward = 0.5*p_mean(np.array([dist_x, dist_y**1.5, angle, speed**1.5]), p=0.0)[0]+0.1*angular_velocity+0.2*min(state[6],state[7])+0.2*slow_near_ground
-        reward = p_mean(np.array([p_mean(np.array([dist_x, dist_y, angle]), p=0.0)[0], speed**2, dist_y**0.3, touching_ground]), p=1.0)[0]
+        reward = p_mean(np.array([p_mean(np.array([dist_x, dist_y, angle]), p=0.0)[0], speed, dist_y**0.3, touching_ground]), p=1.0)[0]
+        # reward = p_mean(np.array([dist_x, near_ground, angle, touching_ground, speed**1.5]), p=0.5)[0]
 
         # print("dist_x:", dist_x)
         # print("dist_y:", dist_y)
@@ -676,7 +677,7 @@ class LunarLander(gym.Env, EzPickle):
 
         # print("reward", reward)
         terminated = False
-        if self.game_over or abs(state[0]) >= 1.0 or normed_angular_distance(state[4], 0.0) > 0.5:
+        if self.game_over or abs(state[0]) >= 1.0 or normed_angular_distance(state[4], 0.0) > 0.3:
             terminated = True
         # if not self.lander.awake:
         #     terminated = True
