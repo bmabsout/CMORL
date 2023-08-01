@@ -6,7 +6,7 @@ import pickle
 import gymnasium as gym
 import time
 from anchored_rl.rl_algs.ddpg import core
-from anchored_rl.utils.logx import EpochLogger
+from anchored_rl.utils.logx import TensorflowLogger
 from anchored_rl.utils.loss_composition import p_mean, scale_gradient, move_toward_zero
 from anchored_rl.utils import args_utils
 from anchored_rl.utils import save_utils
@@ -155,7 +155,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
     """
     anchor_q, anchor_replay = anchored
 
-    logger = EpochLogger(**logger_kwargs)
+    logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
 
     tf.random.set_seed(hp.seed)
@@ -422,7 +422,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             logger.log_tabular('LossQ', average_only=True)
             # logger.log_tabular('LossAQ', average_only=True)
 
-            logger.dump_tabular()
+            logger.dump_tabular(epoch)
     return pi_network
 
 def parse_args_and_train(args=None):
