@@ -653,18 +653,21 @@ class LunarLander(gym.Env, EzPickle):
         dist_x = np.clip((1.0 - 3*np.abs(state[0])/self.observation_space.high[0]), 0.0, 1.0)
         dist_y = np.clip((1.0 - np.abs(state[1])/self.observation_space.high[1]), 0.0, 1.0)
         near_ground = dist_y if dist_y > 0.5 else 0.0
-        # dist_from_landing = (1.0 - np.linalg.norm(state[0:2])/np.linalg.norm(self.observation_space.high[0:2]))**2.0
-        speed = np.clip((1.0 - np.linalg.norm(state[2:4])/np.linalg.norm(self.observation_space.high[2:4])), 0.0, 1.0)
-        slow_near_ground = speed if dist_y > 0.0 else 0.0
-        angle = (1.0 - normed_angular_distance(state[4], 0.0))**1.5
-        angular_velocity = np.clip(1.0 - np.abs(state[5])/np.abs(self.observation_space.high[5]), 0.0, 1.0)
-        touching_ground = min(state[6],state[7])
-        # near_ground =  0.0
-        rw1 = p_mean(np.array([dist_x, dist_y, angle, speed**2.0]), p=0.0)[0]
-        rw2 = p_mean(np.array([dist_x**2.0, dist_y**2.0, angle, touching_ground, speed**3.0]), p=0.0)[0]
-        # reward = rw1*0.2 if dist_y < 0.5 else rw2
-        # reward = 0.5*p_mean(np.array([dist_x, dist_y**1.5, angle, speed**1.5]), p=0.0)[0]+0.1*angular_velocity+0.2*min(state[6],state[7])+0.2*slow_near_ground
-        reward = p_mean(np.array([p_mean(np.array([dist_x, dist_y, angle]), p=0.0)[0], speed, dist_y**0.3, touching_ground]), p=1.0)[0]
+        # # dist_from_landing = (1.0 - np.linalg.norm(state[0:2])/np.linalg.norm(self.observation_space.high[0:2]))**2.0
+        # speed = np.clip((1.0 - np.linalg.norm(state[2:4])/np.linalg.norm(self.observation_space.high[2:4])), 0.0, 1.0)
+        # slow_near_ground = speed if dist_y > 0.0 else 0.0
+        # angle = (1.0 - normed_angular_distance(state[4], 0.0))**1.5
+        # angular_velocity = np.clip(1.0 - np.abs(state[5])/np.abs(self.observation_space.high[5]), 0.0, 1.0)
+        # touching_ground = min(state[6],state[7])
+        # # near_ground =  0.0
+        # rw1 = p_mean(np.array([dist_x, dist_y, angle, speed**2.0]), p=0.0)[0]
+        # rw2 = p_mean(np.array([dist_x**2.0, dist_y**2.0, angle, touching_ground, speed**3.0]), p=0.0)[0]
+        # # reward = rw1*0.2 if dist_y < 0.5 else rw2
+        # # reward = 0.5*p_mean(np.array([dist_x, dist_y**1.5, angle, speed**1.5]), p=0.0)[0]+0.1*angular_velocity+0.2*min(state[6],state[7])+0.2*slow_near_ground
+        # stopped = 1.0 if speed < 0.1 else 0.3
+        first_leg = state[6]
+        second_leg = state[7]
+        reward = p_mean(np.array([dist_x, dist_y, first_leg, second_leg]), p=0.1)[0]
         # reward = p_mean(np.array([dist_x, near_ground, angle, touching_ground, speed**1.5]), p=0.5)[0]
 
         # print("dist_x:", dist_x)
@@ -677,7 +680,7 @@ class LunarLander(gym.Env, EzPickle):
 
         # print("reward", reward)
         terminated = False
-        if self.game_over or abs(state[0]) >= 1.0 or normed_angular_distance(state[4], 0.0) > 0.3:
+        if self.game_over or abs(state[0]) >= 1.0 or normed_angular_distance(state[4], 0.0) > 0.4:
             terminated = True
         # if not self.lander.awake:
         #     terminated = True
