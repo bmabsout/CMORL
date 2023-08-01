@@ -351,3 +351,12 @@ class EpochLogger(Logger):
         v = self.epoch_dict[key]
         vals = np.concatenate(v) if isinstance(v[0], np.ndarray) and len(v[0].shape)>0 else v
         return statistics_scalar(vals)
+
+
+class TensorflowLogger(EpochLogger):
+    def dump_tabular(self, step):
+        super().dump_tabular()
+        with train_summary_writer.as_default():
+            for key in self.log_headers:
+                val = self.log_current_row.get(key, "")
+                tf.summary.scalar(key, val, step=step)
