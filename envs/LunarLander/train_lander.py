@@ -23,10 +23,11 @@ def train(cmd_args, serializer):
     steps_per_epoch=1000
     total_steps = cmd_args.epochs*steps_per_epoch
     cmd_args.learning_rate = WithStrPolyDecay(
-        5e-3,
+        1e-3,
         total_steps,
-        end_learning_rate=5e-5
+        end_learning_rate=1e-4
     )
+    # cmd_args.learning_rate = 1e-3
 
     hp = HyperParams(
         seed=cmd_args.seed,
@@ -37,14 +38,14 @@ def train(cmd_args, serializer):
             "obs_normalizer": lunar_lander.LunarLander().observation_space.high
         },
         start_steps=1000,
-        replay_size=int(4e5),
+        replay_size=int(1e6),
         gamma=0.99,
-        polyak=0.995,
+        polyak=0.5,
         # pi_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),
         # q_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),
         pi_lr=cmd_args.learning_rate,
         q_lr=cmd_args.learning_rate,
-        batch_size=100,
+        batch_size=128,
         act_noise=0.1,
         max_ep_len=300,
         epochs=cmd_args.epochs,
