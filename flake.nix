@@ -7,6 +7,10 @@
     # pypi-deps-db.url = "github:DavHau/pypi-deps-db";
     nixgl.url = "github:guibou/nixGL";
     nixgl.inputs.nixpkgs.follows = "nixpkgs";
+    flake-compat = {
+      url = "github:edolstra/flake-compat";
+      flake = false;
+    };
   };
 
   outputs = {self, nixpkgs, nixgl, ... }@inp:
@@ -38,7 +42,7 @@
                 format="setuptools";
               };
             python = pkgs.python3.withPackages (p: with p;[numpy pygame pybullet
-              matplotlib gymnasium tensorflow tqdm keras pybox2d]);
+              matplotlib gymnasium tensorflow tqdm keras pybox2d ]);
             anchored-rl = pkgs.python3.pkgs.buildPythonPackage rec {
                 pname = "anchored_rl";
                 version = "0.1.0";
@@ -56,7 +60,7 @@
             buildInputs = [
                 pkgs.nixgl.auto.nixGLDefault
                 (pkgs.python3.withPackages (p: with p;[numpy pygame pybullet
-                matplotlib gymnasium tensorflow keras tqdm anchored-rl pybox2d]))
+                matplotlib gymnasium tensorflow keras tqdm anchored-rl pybox2d mypy]))
             ];
           }
         );

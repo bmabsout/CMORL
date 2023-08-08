@@ -154,7 +154,6 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
 
     """
     anchor_q, anchor_replay = anchored
-
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
 
@@ -181,6 +180,8 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
         pi_and_before_tanh = tf.keras.Model(
             pi_network.input, {"pi": pi_network.output, "before_tanh": pi_network.layers[-2].output})
         pi_and_before_tanh.compile()
+        # q_and_before_sigmoid = tf.keras.Model(
+        #     q_network.input, {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output})
     
     # Target networks
     with tf.name_scope('target'):
@@ -216,15 +217,20 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones):
         with tf.GradientTape() as tape:
+            # outputs = q_and_before_sigmoid(tf.concat([obs1, acts], axis=-1))
+            # before_sigmoid = outputs["before_sigmoid"]
+            # after_sigmoid = outputs["q"]
             q = tf.squeeze(q_network(tf.concat([obs1, acts], axis=-1)), axis=1)
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = tf.squeeze(q_targ_network(tf.concat([obs2, pi_targ], axis=-1)), axis=1)
             backup = tf.stop_gradient(rews/max_q_val + (1 - dones)*hp.gamma * q_pi_targ)
-            q_loss = tf.reduce_mean((q-backup)**2) #+ sum(q_network.losses)*0.1
+            # before_tanh_c = tf.squeeze(p_mean(tf.reshape(move_toward_zero(before_sigmoid), [1, -1]), 0.0)**0.5)
+            q_loss = tf.reduce_mean((q-backup)**2) #-before_tanh_c*1e-5  
+            #+ sum(q_network.losses)*0.1
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return q_loss, q
+        return q_loss
 
     @tf.function
     def anchor_q_update(obs1, obs2, acts, rews, dones):
@@ -233,7 +239,8 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             pi_targ = pi_and_before_tanh(obs2)["pi"]
             q_pi_targ = tf.squeeze(anchor_targ_network(tf.concat([obs2, pi_targ], axis=-1)), axis=1)
             backup = tf.stop_gradient(rews/max_q_val + (1 - dones)*hp.gamma * q_pi_targ)
-            q_loss = tf.reduce_mean((q-backup)**2) #+ sum(q_network.losses)*0.1
+            
+            q_loss = tf.reduce_mean((q-backup)**2)  #+ sum(q_network.losses)*0.1
         grads = tape.gradient(q_loss, anchor_q.trainable_variables)
         grads_and_vars = zip(grads, anchor_q.trainable_variables)
         anchor_q_optimizer.apply_gradients(grads_and_vars)
@@ -246,10 +253,10 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             outputs = pi_and_before_tanh(obs1)
             pi = outputs['pi']
             before_tanh = outputs['before_tanh']
-            before_tanh_c = p_mean(tf.reshape(move_toward_zero(before_tanh), [1, -1]), 0.0)**0.5
+            before_tanh_c =  1.0 - tf.reduce_mean(tf.reshape(1.0 - move_toward_zero(before_tanh), [1, -1])**2.0)
             # q_c = tf.stack(
             #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
-            q_c = p_mean(tf.squeeze(q_network(tf.concat([obs1, pi], axis=-1))), 1.0)
+            q_c = tf.reduce_mean(tf.squeeze(q_network(tf.concat([obs1, pi], axis=-1))))
             # before_tanh_c = tf.stack([before_tanh])
             
             aq_c = tf.constant([1.0])
@@ -285,6 +292,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
         pi_optimizer.apply_gradients(grads_and_vars)
         return all_c, q_c, 0.0, 0.0, 0.0, before_tanh_c, 0.0, aq_c
 
+    
     def get_action(o, noise_scale):
         minus_1_to_1 = pi_network(tf.constant(o.reshape(1,-1))).numpy()[0]
         noise = noise_scale * np.random.randn(act_dim)
@@ -363,7 +371,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
                     anchor_rews = tf.constant(anchor_obs_batch['rews'])
                     anchor_dones = tf.constant(anchor_obs_batch['done'])
                 # Q-learning update
-                loss_q, q_vals = q_update(obs1, obs2, acts, rews, dones)
+                loss_q = q_update(obs1, obs2, acts, rews, dones)
                 # if anchor_q:
                 #     loss_anchor_q, anchor_q_vals = anchor_q_update(anchor_obs1, anchor_obs2, anchor_acts, anchor_rews, anchor_dones)
                 logger.store(LossQ=loss_q)
