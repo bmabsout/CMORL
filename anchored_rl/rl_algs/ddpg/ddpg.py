@@ -328,7 +328,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
         use the learned policy (with some noise, via act_noise). 
         """
         if t > hp.start_steps:
-            a = get_action(o, hp.act_noise*t/total_steps)
+            a = get_action(o, hp.act_noise*(total_steps - t)/total_steps)
         else:
             a = env.action_space.sample()
 
