@@ -67,12 +67,12 @@ class Arg_Serializer:
         return f"trained/{experiment_name}/{self.get_semantic_folder_name(hypers)}/seeds/{hypers['seed']}"
 
 
-def rl_alg_serializer():
+def rl_alg_serializer(epochs=50, learning_rate=3e-3):
     return Arg_Serializer(
         abbrev_to_args={
-            'e': Serialized_Argument(name='--epochs', type=int, default=50, help='number of epochs'),
+            'e': Serialized_Argument(name='--epochs', type=int, default=epochs, help='number of epochs'),
             's': Serialized_Argument(name='--seed', type=int, default=int(time.time() * 1e5) % int(1e6)),
-            'l': Serialized_Argument(name='--learning_rate', type=float, default=3e-3),
+            'l': Serialized_Argument(name='--learning_rate', type=float, default=learning_rate),
         },
         ignored={'save_path', 'seed'}
     )
@@ -88,10 +88,10 @@ def anchor_serializer():
     )
 
 
-def default_serializer():
+def default_serializer(epochs=50, learning_rate=3e-3):
     return Arg_Serializer.join(
         # ArgsSerializer({'n': Serialized_Argument(name='--experiment_name', type=str, required=True)}, ignored={'experiment_name'}),
-        rl_alg_serializer(), anchor_serializer())
+        rl_alg_serializer(epochs, learning_rate), anchor_serializer())
 
 def parse_arguments(serializer:Arg_Serializer, args=None, parser = None):
     if parser is None:
