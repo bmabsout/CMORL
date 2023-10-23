@@ -83,14 +83,14 @@ def objective_composition_serializer():
     return Arg_Serializer(
         abbrev_to_args={
         },
-        ignored={}
+        ignored=set()
     )
 
 
 def default_serializer(epochs=50, learning_rate=3e-3):
     return Arg_Serializer.join(
         # ArgsSerializer({'n': Serialized_Argument(name='--experiment_name', type=str, required=True)}, ignored={'experiment_name'}),
-        rl_alg_serializer(epochs, learning_rate), objective_composition_serializer_serializer())
+        rl_alg_serializer(epochs, learning_rate), objective_composition_serializer())
 
 def parse_arguments(serializer:Arg_Serializer, args=None, parser = None):
     if parser is None:
