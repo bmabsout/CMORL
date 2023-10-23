@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-import Pendulum
+from Pendulum import PendulumEnv
 import argparse
 from cmorl.utils import test_utils
 import time
@@ -18,5 +18,5 @@ def parse_args(args=None):
 if __name__ == "__main__":
     # import matplotlib.pyplot as plt
     cmd_args = parse_args()
-    runs = test_utils.run_tests(Pendulum.PendulumEnv(render_mode="human" if cmd_args.render else None), cmd_args)
+    runs = test_utils.run_tests(PendulumEnv(render_mode="human" if cmd_args.render else None), cmd_args)
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")

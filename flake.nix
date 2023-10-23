@@ -31,23 +31,12 @@
       # enter this python environment by executing `nix shell .`
       devShell = forAllSystems (system: pkgs:
         let
-            pybox2d = pkgs.python3.pkgs.buildPythonPackage rec {
-                pname = "Box2D";
-                version = "2.3.10";
-              
-                src = pkgs.fetchFromGitHub {
-                    owner = "pybox2d";
-                    repo = "pybox2d";
-                    rev = "master";
-                    sha256 = "a4JjUrsSbAv9SjqZLwuqXhz2x2YhRzZZTytu4X5YWX8=";
-                };
-                nativeBuildInputs = [ pkgs.pkgconfig pkgs.swig ];
-                doCheck = false;
-                format="setuptools";
-              };
+            pybox2d = pkgs.python3Packages.callPackage ./nix/pybox2d.nix {};
+            mujoco-py = pkgs.python3Packages.callPackage ./nix/mujoco-py.nix {};
             python = pkgs.python3.withPackages (p: with p;[numpy pygame pybullet
-              matplotlib gymnasium tensorflow tqdm keras pybox2d ]);
-            anchored-rl = pkgs.python3.pkgs.buildPythonPackage rec {
+              matplotlib gymnasium tensorflow tqdm keras pybox2d mujoco-py]);
+          
+            cmorl = pkgs.python3.pkgs.buildPythonPackage rec {
                 pname = "cmorl";
                 version = "0.1.0";
               
@@ -57,6 +46,7 @@
               
                 propagatedBuildInputs = [
                   python
+
                 ];
               };
             
@@ -64,7 +54,7 @@
             buildInputs = [
                 pkgs.nixgl.auto.nixGLDefault
                 (pkgs.python3.withPackages (p: with p;[numpy pygame pybullet
-                matplotlib gymnasium tensorflow keras tqdm anchored-rl pybox2d mypy]))
+                matplotlib gymnasium tensorflow keras tqdm cmorl pybox2d mypy mujoco-py ]))
             ];
           }
         );
