@@ -192,16 +192,12 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
     # make sure network and target network is using the same weights
     pi_targ_network.set_weights(pi_network.get_weights())
     q_targ_network.set_weights(q_network.get_weights())
-    if anchor_q:
-        anchor_targ_network.set_weights(anchor_q.get_weights())
 
     # Experience buffer
     replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=hp.replay_size)
     # Separate train ops for pi, q
     pi_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.pi_lr)
     q_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.q_lr)
-    if anchor_q:
-        anchor_q_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.q_lr)
 
     # Polyak averaging for target variables
     @tf.function
@@ -210,41 +206,19 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             v_targ.assign(hp.polyak*v_targ + (1-hp.polyak)*v_main)
         for v_main, v_targ in zip(q_network.trainable_variables, q_targ_network.trainable_variables):
             v_targ.assign(hp.polyak*v_targ + (1-hp.polyak)*v_main)
-        if anchor_q:
-            for v_main, v_targ in zip(anchor_q.trainable_variables, anchor_targ_network.trainable_variables):
-                v_targ.assign(hp.polyak*v_targ + (1-hp.polyak)*v_main)
 
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones):
         with tf.GradientTape() as tape:
-            # outputs = q_and_before_sigmoid(tf.concat([obs1, acts], axis=-1))
-            # before_sigmoid = outputs["before_sigmoid"]
-            # after_sigmoid = outputs["q"]
             q = tf.squeeze(q_network(tf.concat([obs1, acts], axis=-1)), axis=1)
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = tf.squeeze(q_targ_network(tf.concat([obs2, pi_targ], axis=-1)), axis=1)
             backup = tf.stop_gradient(rews/max_q_val + (1 - dones)*hp.gamma * q_pi_targ)
-            # before_tanh_c = tf.squeeze(p_mean(tf.reshape(move_toward_zero(before_sigmoid), [1, -1]), 0.0)**0.5)
             q_loss = tf.reduce_mean((q-backup)**2) #-before_tanh_c*1e-5  
-            #+ sum(q_network.losses)*0.1
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
         return q_loss
-
-    @tf.function
-    def anchor_q_update(obs1, obs2, acts, rews, dones):
-        with tf.GradientTape() as tape:
-            q = tf.squeeze(anchor_q(tf.concat([obs1, acts], axis=-1)), axis=1)
-            pi_targ = pi_and_before_tanh(obs2)["pi"]
-            q_pi_targ = tf.squeeze(anchor_targ_network(tf.concat([obs2, pi_targ], axis=-1)), axis=1)
-            backup = tf.stop_gradient(rews/max_q_val + (1 - dones)*hp.gamma * q_pi_targ)
-            
-            q_loss = tf.reduce_mean((q-backup)**2)  #+ sum(q_network.losses)*0.1
-        grads = tape.gradient(q_loss, anchor_q.trainable_variables)
-        grads_and_vars = zip(grads, anchor_q.trainable_variables)
-        anchor_q_optimizer.apply_gradients(grads_and_vars)
-        return q_loss, q
 
 
     @tf.function
@@ -254,36 +228,9 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             pi = outputs['pi']
             before_tanh = outputs['before_tanh']
             before_tanh_c =  1.0 - tf.reduce_mean(tf.reshape(1.0 - move_toward_zero(before_tanh), [1, -1])**2.0)
-            # q_c = tf.stack(
             #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
             q_c = tf.reduce_mean(tf.squeeze(q_network(tf.concat([obs1, pi], axis=-1))))
-            # before_tanh_c = tf.stack([before_tanh])
-            
-            aq_c = tf.constant([1.0])
-            if anchor_q:
-                pi_anchor = pi_and_before_tanh(anchor_obs1)
-                aq_c = tf.reduce_mean(anchor_q(tf.concat([anchor_obs1, pi_anchor["pi"]], axis=-1)))
-                q_c = p_mean(tf.stack([tf.squeeze(q_c)**0.5, aq_c]), 0.0)
-            # objective for regularizing the output of the nn as well as the weights
-            # tf.print(pi_network.trainable_variables)
-            # tf.print(pi_network.losses)
-            # reg_c = tf.squeeze(p_mean(tf.stack([spatial_c, temporal_c, before_tanh_c],axis=1), 0.0))
-            # all_c = p_mean(tf.stack([scale_gradient(tf.squeeze(aq_c), 3e2), tf.squeeze(before_tanh_c)]), p=0.0)
-            # all_c = scale_gradient(aq_c,0.0)
             all_c = p_mean(tf.stack([scale_gradient(tf.squeeze(q_c), 3e2), scale_gradient(tf.squeeze(before_tanh_c),0.1)]), p=0.0)
-            # all_c = p_mean(tf.stack([ scale_gradient(aq_c, 3e2), scale_gradient(q_c, 3e2)], axis=1), 0.0)
-            # all_c = q_c + 0.008*pi_diffs_c + 0.005*pi_bar_c + 0.025*center_c
-            # if debug:
-                # tf.print("wa", pi_anchor)
-            #     tf.print("temporal_c", temporal_c)
-            #     tf.print("spatial_c", spatial_c)
-            #     tf.print("center_c", center_c)
-            #     tf.print("pi_weight_c", pi_weight_c)
-            #     tf.print("before_tanh_c", before_tanh_c)
-            #     tf.print("reg_c", reg_c)
-                # tf.print("aq_c", aq_c)
-            #     tf.print("q_c", q_c)
-            #     tf.print("all_c", all_c)
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if debug:
@@ -408,7 +355,6 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             # Save model
             if (epoch % save_freq == 0) or (epoch == hp.epochs-1):
                 on_save(pi_network, q_network, epoch//save_freq, replay_buffer)
-            #     logger.save_state({'env': env}, None)
 
             # Test the performance of the deterministic version of the agent.
             # test_agent()
@@ -425,10 +371,8 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             logger.log_tabular('Pi_weight', average_only=True)
             logger.log_tabular('Reg', average_only=True)
             logger.log_tabular('Q', average_only=True)
-            logger.log_tabular('AQ', average_only=True)
             logger.log_tabular('All', average_only=True)
             logger.log_tabular('LossQ', average_only=True)
-            # logger.log_tabular('LossAQ', average_only=True)
 
             logger.dump_tabular(epoch)
     return pi_network
