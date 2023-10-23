@@ -1,6 +1,6 @@
 from typing import Any, Optional, Iterator
 import copy
-from anchored_rl.utils.serialization_utils import serialize_dict
+from cmorl.utils.serialization_utils import serialize_dict
 from functools import reduce
 import argparse
 import time

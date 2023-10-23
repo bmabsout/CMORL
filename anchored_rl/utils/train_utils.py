@@ -1,6 +1,6 @@
 from functools import partial
-from anchored_rl.utils import save_utils
-from anchored_rl.utils.args_utils import Arg_Serializer
+from cmorl.utils import save_utils
+from cmorl.utils.args_utils import Arg_Serializer
 
 
 

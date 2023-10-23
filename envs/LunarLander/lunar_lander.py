@@ -11,7 +11,7 @@ from gymnasium import error, spaces
 from gymnasium.error import DependencyNotInstalled
 from gymnasium.utils import EzPickle, colorize
 from gymnasium.utils.step_api_compatibility import step_api_compatibility
-from anchored_rl.utils.loss_composition import p_mean
+from cmorl.utils.loss_composition import p_mean
 
 try:
     import Box2D

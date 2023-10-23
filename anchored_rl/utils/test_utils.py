@@ -1,5 +1,5 @@
 from pathlib import Path
-from anchored_rl.utils import save_utils
+from cmorl.utils import save_utils
 import numpy as np
 
 def test(actor, env, seed=123, render=True, num_steps=100):

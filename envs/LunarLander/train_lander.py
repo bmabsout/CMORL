@@ -3,9 +3,9 @@ import json
 import os
 import time
 import pickle
-from anchored_rl.rl_algs.ddpg.ddpg import ddpg, HyperParams
-from anchored_rl.utils import args_utils
-from anchored_rl.utils import train_utils
+from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
+from cmorl.utils import args_utils
+from cmorl.utils import train_utils
 import lunar_lander
 import tensorflow as tf
 

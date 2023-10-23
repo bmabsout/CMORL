@@ -3,16 +3,16 @@ from setuptools import setup, find_packages
 import sys
 
 setup(
-    name='anchored_rl',
-    py_modules=['anchored_rl'],
+    name='cmorl',
+    py_modules=['cmorl'],
     packages=find_packages(),
     version='0.1',
     install_requires=[
         'gymnasium[classical_control]',
         'numpy',
-        'tensorflow-gpu',
+        'tensorflow',
         'tqdm'
     ],
-    description="deep RL actor critic methods with anchors",
+    description="deep RL actor critic methods with multi-objective composition",
     author="Bassel El Mabsout"
 )

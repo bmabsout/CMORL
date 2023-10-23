@@ -8,7 +8,7 @@ Logs to a tab-separated-values file (path/to/output_directory/progress.txt)
 import json
 import numpy as np
 import os.path as osp, time, atexit, os
-from anchored_rl.utils.serialization_utils import ExtraTypesEncoder
+from cmorl.utils.serialization_utils import ExtraTypesEncoder
 import tensorflow as tf
 
 color2num = dict(
