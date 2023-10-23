@@ -73,25 +73,24 @@ def rl_alg_serializer(epochs=50, learning_rate=3e-3):
             'e': Serialized_Argument(name='--epochs', type=int, default=epochs, help='number of epochs'),
             's': Serialized_Argument(name='--seed', type=int, default=int(time.time() * 1e5) % int(1e6)),
             'l': Serialized_Argument(name='--learning_rate', type=float, default=learning_rate),
-        },
-        ignored={'save_path', 'seed'}
-    )
-
-def anchor_serializer():
-    return Arg_Serializer(
-        abbrev_to_args={
-            'a': Serialized_Argument(name='--anchored', action='store_true', help='whether to enable anchors or not'),
             'p': Serialized_Argument(name='--prev_folder', type=str, help='folder location for a previous training run with initialized critics and actors'),
             'r': Serialized_Argument(name='--replay_save', action='store_true', help='whether to save the replay buffer')
         },
-        ignored={'replay_save'}
+        ignored={'save_path', 'seed', 'replay_save'}
+    )
+
+def objective_composition_serializer():
+    return Arg_Serializer(
+        abbrev_to_args={
+        },
+        ignored={}
     )
 
 
 def default_serializer(epochs=50, learning_rate=3e-3):
     return Arg_Serializer.join(
         # ArgsSerializer({'n': Serialized_Argument(name='--experiment_name', type=str, required=True)}, ignored={'experiment_name'}),
-        rl_alg_serializer(epochs, learning_rate), anchor_serializer())
+        rl_alg_serializer(epochs, learning_rate), objective_composition_serializer_serializer())
 
 def parse_arguments(serializer:Arg_Serializer, args=None, parser = None):
     if parser is None:
@@ -99,6 +98,4 @@ def parse_arguments(serializer:Arg_Serializer, args=None, parser = None):
     serializer.add_serialized_args_to_parser(parser)
 
     cmd_args = parser.parse_args(args)
-    if cmd_args.anchored and not cmd_args.prev_folder:
-        parser.error("cannot enable anchors without specifying --prev_folder")
     return cmd_args
