@@ -4,9 +4,9 @@ import os
 import time
 from tensorflow.keras import models, Model
 import pickle
-from anchored_rl.utils.args_utils import Arg_Serializer, Serialized_Argument
+from cmorl.utils.args_utils import Arg_Serializer, Serialized_Argument
 from pathlib import Path
-from anchored_rl.utils.serialization_utils import ExtraTypesEncoder
+from cmorl.utils.serialization_utils import ExtraTypesEncoder
 from functools import partial
 
 

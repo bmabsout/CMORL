@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import Pendulum
 import argparse
-from anchored_rl.utils import test_utils
+from cmorl.utils import test_utils
 import time
 
 

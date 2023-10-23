@@ -5,11 +5,11 @@ import tensorflow as tf
 import pickle
 import gymnasium as gym
 import time
-from anchored_rl.rl_algs.ddpg import core
-from anchored_rl.utils.logx import TensorflowLogger
-from anchored_rl.utils.loss_composition import p_mean, scale_gradient, move_toward_zero
-from anchored_rl.utils import args_utils
-from anchored_rl.utils import save_utils
+from cmorl.rl_algs.ddpg import core
+from cmorl.utils.logx import TensorflowLogger
+from cmorl.utils.loss_composition import p_mean, scale_gradient, move_toward_zero
+from cmorl.utils import args_utils
+from cmorl.utils import save_utils
 from functools import partial
 
 #adapted from https://github.com/tanzhenyu/spinup-tf2/blob/master/spinup/algos/ddpg/ddpg.py
@@ -434,8 +434,8 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
     return pi_network
 
 def parse_args_and_train(args=None):
-    import anchored_rl.utils.train_utils as train_utils
-    import anchored_rl.utils.args_utils as args_utils
+    import cmorl.utils.train_utils as train_utils
+    import cmorl.utils.args_utils as args_utils
     serializer = args_utils.Arg_Serializer.join(
         args_utils.Arg_Serializer({'g': args_utils.Serialized_Argument(name='--gym_env', type=str, required=True)}, ignored={'gym_env'}),
         args_utils.default_serializer())

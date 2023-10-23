@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 import reacher
-from anchored_rl.utils import test_utils
+from cmorl.utils import test_utils
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser()

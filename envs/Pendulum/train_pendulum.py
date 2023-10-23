@@ -1,10 +1,10 @@
-from anchored_rl.rl_algs.ddpg.ddpg import ddpg, HyperParams
-from anchored_rl.utils import args_utils
+from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
+from cmorl.utils import args_utils
 import Pendulum
 
 def parse_args_and_train(args=None):
-    import anchored_rl.utils.train_utils as train_utils
-    import anchored_rl.utils.args_utils as args_utils
+    import cmorl.utils.train_utils as train_utils
+    import cmorl.utils.args_utils as args_utils
     serializer = args_utils.default_serializer(epochs=10, learning_rate=1e-4)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams(epochs=cmd_args.epochs, q_lr=cmd_args.learning_rate, pi_lr=cmd_args.learning_rate, seed=cmd_args.seed, max_ep_len=200)

@@ -18,9 +18,13 @@
       l = nixpkgs.lib // builtins;
       supportedSystems = [ "x86_64-linux" "aarch64-darwin" ];
       forAllSystems = f: l.genAttrs supportedSystems
-        (system: f system (import nixpkgs {inherit system;
-        overlays=[nixgl.overlay]; config.allowUnfree=true; config.cudaSupport =
-          true; config.cudaCapabilities = [ "8.6" ];}));
+        (system: f system (import nixpkgs {
+          inherit system;
+          overlays=[nixgl.overlay];
+          config.allowUnfree=true;
+          # config.cudaSupport = true;
+          # config.cudaCapabilities = [ "8.6" ];
+        }));
       
     in
     {
@@ -44,7 +48,7 @@
             python = pkgs.python3.withPackages (p: with p;[numpy pygame pybullet
               matplotlib gymnasium tensorflow tqdm keras pybox2d ]);
             anchored-rl = pkgs.python3.pkgs.buildPythonPackage rec {
-                pname = "anchored_rl";
+                pname = "cmorl";
                 version = "0.1.0";
               
                 src = ./.;
