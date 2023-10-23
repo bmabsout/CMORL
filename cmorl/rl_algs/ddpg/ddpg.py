@@ -85,7 +85,7 @@ class HyperParams:
 Deep Deterministic Policy Gradient (DDPG)
 
 """
-def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_critic=core.mlp_actor_critic, logger_kwargs=dict(), save_freq=1, on_save=lambda *_:(), anchored=(None, None), extra_hyperparameters: dict[str, object]={}):
+def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_critic=core.mlp_actor_critic, logger_kwargs=dict(), save_freq=1, on_save=lambda *_:(), extra_hyperparameters: dict[str, object]={}):
     """
 
     Args:
@@ -153,7 +153,6 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
             the current policy and value function.
 
     """
-    anchor_q, anchor_replay = anchored
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
 
@@ -170,8 +169,6 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
     # Main outputs from computation graph
     with tf.name_scope('main'):
         pi_network, q_network = actor_critic(env.observation_space, env.action_space, **hp.ac_kwargs)
-        if anchor_q:
-            anchor_targ_network = tf.keras.models.clone_model(anchor_q)
         
         # before_tanh_output = pi_network.layers[-1].output
         print(pi_network.output)
@@ -222,7 +219,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
 
 
     @tf.function
-    def pi_update(obs1, obs2, anchor_obs1, anchor_ac1, debug=False):
+    def pi_update(obs1, obs2, debug=False):
         with tf.GradientTape() as tape:
             outputs = pi_and_before_tanh(obs1)
             pi = outputs['pi']
@@ -237,7 +234,7 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
         grads_and_vars = zip(grads, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
-        return all_c, q_c, 0.0, 0.0, 0.0, before_tanh_c, 0.0, aq_c
+        return all_c, q_c, 0.0, 0.0, 0.0, before_tanh_c, 0.0
 
     
     def get_action(o, noise_scale):
@@ -309,29 +306,16 @@ def ddpg(env_fn: Callable[[], gym.Env], hp: HyperParams=HyperParams(),actor_crit
                 acts = tf.constant(batch['acts'])
                 rews = tf.constant(batch['rews'])
                 dones = tf.constant(batch['done'])
-                anchor_obs1 = None
-                if anchor_q:
-                    anchor_obs_batch = anchor_replay.sample_batch(hp.batch_size)
-                    anchor_obs1 = tf.constant(anchor_obs_batch['obs1'])
-                    anchor_obs2 = tf.constant(anchor_obs_batch['obs2'])
-                    anchor_acts = tf.constant(anchor_obs_batch['acts'])
-                    anchor_rews = tf.constant(anchor_obs_batch['rews'])
-                    anchor_dones = tf.constant(anchor_obs_batch['done'])
                 # Q-learning update
                 loss_q = q_update(obs1, obs2, acts, rews, dones)
-                # if anchor_q:
-                #     loss_anchor_q, anchor_q_vals = anchor_q_update(anchor_obs1, anchor_obs2, anchor_acts, anchor_rews, anchor_dones)
                 logger.store(LossQ=loss_q)
-                # logger.store(LossAQ=loss_anchor_q)
 
                 # Policy update
-                all_c, q_c, reg_c, temporal_c, spatial_c, before_tanh_c, pi_weight_c, aq_c = pi_update(obs1, obs2, anchor_obs1, (train_step+1)%20 == 0)
+                all_c, q_c, reg_c, temporal_c, spatial_c, before_tanh_c, pi_weight_c = pi_update(obs1, obs2, (train_step+1)%20 == 0)
 
                 logger.store(
                     All=all_c,
                     Q=q_c,
-                    AQ=aq_c,
-                    # AQ=anchor_q_vals,
                     Reg=reg_c,
                     Temporal=temporal_c,
                     Spatial=spatial_c,

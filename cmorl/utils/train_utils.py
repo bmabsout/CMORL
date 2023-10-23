@@ -21,7 +21,4 @@ def create_train_folder_and_params(experiment_name, hyperparams, cmd_args, seria
             return save_utils.load_actor(cmd_args.prev_folder), save_utils.load_critic(cmd_args.prev_folder)
         generated_params["actor_critic"] = existing_actor_critic
 
-    if cmd_args.anchored:
-        generated_params["anchored"] = (save_utils.load_critic(cmd_args.prev_folder), save_utils.load_replay(cmd_args.prev_folder.parent))
-
     return generated_params
