@@ -30,31 +30,12 @@
     {
       # enter this python environment by executing `nix shell .`
       devShell = forAllSystems (system: pkgs:
-        let
-            pybox2d = pkgs.python3Packages.callPackage ./nix/pybox2d.nix {};
-            mujoco-py = pkgs.python3Packages.callPackage ./nix/mujoco-py.nix {};
-            python = pkgs.python3.withPackages (p: with p;[numpy pygame pybullet
-              matplotlib gymnasium tensorflow tqdm keras pybox2d mujoco-py]);
-          
-            cmorl = pkgs.python3.pkgs.buildPythonPackage rec {
-                pname = "cmorl";
-                version = "0.1.0";
-              
-                src = ./.;
-                doCheck = false;
-                #format = "setuputils";
-              
-                propagatedBuildInputs = [
-                  python
-
-                ];
-              };
-            
+        let cmorl = pkgs.python3Packages.callPackage ./nix/cmorl.nix {};
+            python = pkgs.python3.withPackages (p: [cmorl] ++ cmorl.propagatedBuildInputs);
         in pkgs.mkShell {
             buildInputs = [
                 pkgs.nixgl.auto.nixGLDefault
-                (pkgs.python3.withPackages (p: with p;[numpy pygame pybullet
-                matplotlib gymnasium tensorflow keras tqdm cmorl pybox2d mypy mujoco-py ]))
+                python
             ];
           }
         );
