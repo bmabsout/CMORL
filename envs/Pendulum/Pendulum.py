@@ -103,7 +103,7 @@ class PendulumEnv(gym.Env):
         g=10.0,
         screen=None,
         setpoint=0.0,
-        single_reward=False,
+        single_reward=True,
     ):
         self.max_speed = 8
         self.max_torque = 2.0
