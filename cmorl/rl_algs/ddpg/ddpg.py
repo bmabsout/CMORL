@@ -272,7 +272,7 @@ def ddpg(
             )
             #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            q1_c = tf.reduce_mean(q_values[:, 0])
+            q1_c = tf.reduce_mean(q_values[:, 0]) ** 2
             q2_c = tf.reduce_mean(q_values[:, 1])
 
             q_c = p_mean(tf.stack([q1_c, q2_c]), p=-4.0)
