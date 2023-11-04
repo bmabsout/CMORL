@@ -143,9 +143,10 @@ class PendulumEnv(gym.Env):
         angle_rw = 1.0 - normed_angular_distance(th, self.setpoint)
 
         # Normalizing the torque to be in the range [0, 1]
-        normalized_u = (u - -self.max_torque) / (self.max_torque - -self.max_torque)
+        normalized_u = u / self.max_torque
+        normalized_u = abs(normalized_u)
         # Merge the angle reward and the normalized torque into a single reward vector
-        rw_vec = np.array([angle_rw, normalized_u], dtype=np.float32)
+        rw_vec = np.array([angle_rw, 1 - normalized_u], dtype=np.float32)
 
         # This is the integrated dynamics of the pendulum in physics.
         # we need to write a tensorflow version of this
@@ -157,6 +158,7 @@ class PendulumEnv(gym.Env):
 
         if self.render_mode == "human":
             self.render()
+        # TODO: add a case for geometric mean reward
         if self.single_reward:
             reward = angle_rw
         else:
