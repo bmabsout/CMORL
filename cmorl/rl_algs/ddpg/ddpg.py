@@ -20,14 +20,11 @@ class ReplayBuffer:
     A simple FIFO experience replay buffer for DDPG agents.
     """
 
-    def __init__(self, obs_dim, act_dim, size, rw_vec_size=1):
+    def __init__(self, obs_dim, act_dim, size, rwds_dim=1):
         self.obs1_buf = np.zeros([size, obs_dim], dtype=np.float32)
         self.obs2_buf = np.zeros([size, obs_dim], dtype=np.float32)
         self.acts_buf = np.zeros([size, act_dim], dtype=np.float32)
-        self.rews_buf = np.zeros(
-            [size, rw_vec_size],
-            dtype=np.float32,
-        )
+        self.rews_buf = np.zeros([size, rwds_dim], dtype=np.float32)
         self.done_buf = np.zeros(size, dtype=np.float32)
         self.ptr, self.size, self.max_size = 0, 0, size
 
@@ -102,6 +99,7 @@ def ddpg(
     save_freq=1,
     on_save=lambda *_: (),
     extra_hyperparameters: dict[str, object] = {},
+    rew_dims=2,
 ):
     """
 
@@ -185,7 +183,7 @@ def ddpg(
     ), "only continuous action space is supported"
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
-    max_q_val = 1.0 / (1.0 - hp.gamma)
+    max_q_val = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
 
     # Main outputs from computation graph
     with tf.name_scope("main"):
@@ -219,7 +217,7 @@ def ddpg(
 
     # Experience buffer
     replay_buffer = ReplayBuffer(
-        obs_dim=obs_dim, act_dim=act_dim, size=hp.replay_size, rw_vec_size=1
+        obs_dim=obs_dim, act_dim=act_dim, size=hp.replay_size, rwds_dim=2
     )
     # Separate train ops for pi, q
     pi_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.pi_lr)
@@ -240,15 +238,24 @@ def ddpg(
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones):
         with tf.GradientTape() as tape:
-            q = tf.squeeze(q_network(tf.concat([obs1, acts], axis=-1)), axis=1)
+            q = q_network(tf.concat([obs1, acts], axis=-1))
+            # q_squeezed = tf.squeeze(q, axis=1)
+
             pi_targ = pi_targ_network(obs2)
-            q_pi_targ = tf.squeeze(
-                q_targ_network(tf.concat([obs2, pi_targ], axis=-1)), axis=1
-            )
+            q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
+            # q_pi_targ_squeezed = tf.squeeze(q_pi_targ, axis=1)
+
+            # rewards = tf.squeeze(rews, axis=1)
+            # TODO: tf.tile -> search about it
+            # dones = tf.tile(tf.expand_dims(dones, axis=-1), [1, rew_dims])
+            dones = tf.stack([dones, dones], axis=-1)
+
             backup = tf.stop_gradient(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
-            q_loss = tf.reduce_mean((q - backup) ** 2)  # -before_tanh_c*1e-5
+            # q_loss = tf.reduce_mean((q - backup) ** 2, 0)  # -before_tanh_c*1e-5
+            q_loss = tf.reduce_mean((q - backup) ** 2)
+            # q_loss = p_mean(q_loss, p=2)
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
@@ -264,12 +271,17 @@ def ddpg(
                 tf.reshape(1.0 - move_toward_zero(before_tanh), [1, -1]) ** 2.0
             )
             #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
-            q_c = tf.reduce_mean(tf.squeeze(q_network(tf.concat([obs1, pi], axis=-1))))
+            q_values = q_network(tf.concat([obs1, pi], axis=-1))
+            q1_c = tf.reduce_mean(q_values[:, 0])
+            q2_c = tf.reduce_mean(q_values[:, 1])
+
+            q_c = p_mean(tf.stack([q1_c, q2_c]), p=-4.0)
+
             all_c = p_mean(
                 tf.stack(
                     [
                         scale_gradient(tf.squeeze(q_c), 3e2),
-                        scale_gradient(tf.squeeze(before_tanh_c), 0.1),
+                        # scale_gradient(tf.squeeze(before_tanh_c), 0.1),
                     ]
                 ),
                 p=0.0,
@@ -280,7 +292,7 @@ def ddpg(
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
         grads_and_vars = zip(grads, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
-        return all_c, q_c, 0.0, 0.0, 0.0, before_tanh_c, 0.0
+        return all_c, q1_c, q2_c, q_c, before_tanh_c
 
     def get_action(o, noise_scale):
         minus_1_to_1 = pi_network(tf.constant(o.reshape(1, -1))).numpy()[0]
@@ -346,8 +358,9 @@ def ddpg(
             """
             for train_step in range(hp.train_steps):
                 batch = replay_buffer.sample_batch(hp.batch_size)
-
+                # print(1, batch["obs1"])
                 obs1 = tf.constant(batch["obs1"])
+                # print(2, obs1)
                 obs2 = tf.constant(batch["obs2"])
                 acts = tf.constant(batch["acts"])
                 rews = tf.constant(batch["rews"])
@@ -359,29 +372,26 @@ def ddpg(
                 # Policy update
                 (
                     all_c,
+                    q1_c,
+                    q2_c,
                     q_c,
-                    reg_c,
-                    temporal_c,
-                    spatial_c,
                     before_tanh_c,
-                    pi_weight_c,
                 ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
 
                 logger.store(
                     All=all_c,
+                    Q1=q1_c,
+                    Q2=q2_c,
                     Q=q_c,
-                    Reg=reg_c,
-                    Temporal=temporal_c,
-                    Spatial=spatial_c,
                     Before_tanh=before_tanh_c,
-                    Pi_weight=pi_weight_c,
                 )
 
                 # target update
                 target_update()
 
         if d or (ep_len == hp.max_ep_len):
-            logger.store(EpRet=ep_ret, EpLen=ep_len)
+            print(ep_ret)
+            logger.store(EpRet1=ep_ret[0], EpRet2=ep_ret[1], EpLen=ep_len)
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -399,15 +409,14 @@ def ddpg(
 
             # Log info about epoch
             logger.log_tabular("Epoch", epoch)
-            logger.log_tabular("EpRet", average_only=True)
+            logger.log_tabular("EpRet1", average_only=True)
+            logger.log_tabular("EpRet2", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             logger.log_tabular("Time", time.time() - start_time)
             logger.log_tabular("TotalEnvInteracts", t)
-            logger.log_tabular("Temporal", average_only=True)
-            logger.log_tabular("Spatial", average_only=True)
             logger.log_tabular("Before_tanh", average_only=True)
-            logger.log_tabular("Pi_weight", average_only=True)
-            logger.log_tabular("Reg", average_only=True)
+            logger.log_tabular("Q1", average_only=True)
+            logger.log_tabular("Q2", average_only=True)
             logger.log_tabular("Q", average_only=True)
             logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
