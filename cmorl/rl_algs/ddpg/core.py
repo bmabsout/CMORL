@@ -63,18 +63,12 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
     return model
 
 
-def critic(
-    obs_space: spaces.Box,
-    act_space: spaces.Box,
-    hidden_sizes,
-    obs_normalizer,
-    rw_vec_size=2,
-):
+def critic(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer):
     concated_normalizer = np.concatenate([obs_normalizer, np.ones(act_space.shape[0])])
     inputs = tf.keras.Input((obs_space.shape[0] + act_space.shape[0],))
     normalized_input = Lambda(lambda t: t / concated_normalizer)(inputs)
     outputs = mlp_functional(
-        normalized_input, hidden_sizes + (rw_vec_size,), output_activation=None
+        normalized_input, hidden_sizes + (1,), output_activation=None
     )
 
     # name the layer before sigmoid
@@ -92,12 +86,11 @@ def mlp_actor_critic(
     obs_normalizer=None,
     actor_hidden_sizes=(32, 32),
     critic_hidden_sizes=(256, 256),
-    rw_vec_size=1,
 ) -> tuple[Model, Model]:
     if obs_normalizer is None:
         obs_normalizer = obs_space.high * 0.0 + 1.0
     obs_normalizer = np.array(obs_normalizer)
     return (
         actor(obs_space, act_space, actor_hidden_sizes, obs_normalizer),
-        critic(obs_space, act_space, critic_hidden_sizes, obs_normalizer, rw_vec_size),
+        critic(obs_space, act_space, critic_hidden_sizes, obs_normalizer),
     )
