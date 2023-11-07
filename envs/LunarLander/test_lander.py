@@ -1,6 +1,6 @@
 import argparse
 import numpy as np
-import lunar_lander
+from . import lunar_lander
 from cmorl.utils import test_utils
 
 def parse_args(args=None):
