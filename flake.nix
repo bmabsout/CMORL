@@ -31,12 +31,15 @@
       # enter this python environment by executing `nix shell .`
       devShell = forAllSystems (system: pkgs:
         let cmorl = pkgs.python3Packages.callPackage ./nix/cmorl.nix {};
-            python = pkgs.python3.withPackages (p: [cmorl] ++ cmorl.propagatedBuildInputs);
+            python = pkgs.python3.withPackages (p: cmorl.propagatedBuildInputs);
         in pkgs.mkShell {
             buildInputs = [
                 pkgs.nixgl.auto.nixGLDefault
                 python
             ];
+            shellHook = ''
+              export PYTHONPATH=$PYTHONPATH:$(pwd) # to allow cmorl to be imported as editable
+            '';
           }
         );
     };
