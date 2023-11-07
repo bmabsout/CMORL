@@ -1,5 +1,5 @@
 import argparse
-import train_reacher
+from . import train_reacher
 from cmorl.utils import args_utils
 from pathlib import Path
 
