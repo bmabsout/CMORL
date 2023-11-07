@@ -1,6 +1,5 @@
-import tensorflow as tf
 import numpy as np
-from cmorl.envs.Pendulum.Pendulum import PendulumEnv
+from .Pendulum import PendulumEnv
 import argparse
 from cmorl.utils import test_utils
 import time

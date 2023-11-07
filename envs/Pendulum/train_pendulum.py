@@ -1,6 +1,6 @@
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
 from cmorl.utils import args_utils
-from cmorl.envs.Pendulum.Pendulum import PendulumEnv
+from .Pendulum import PendulumEnv
 
 
 def parse_args_and_train(args=None):
