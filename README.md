@@ -8,7 +8,7 @@ Composition for Multi-Objective Reinforcement Learning
 * Run `nix develop --impure`` in the repo's root, this should take some time but then you will be dropped in a bash shell with everything required to run training
 
 ## Via Conda
-* `conda create -f environment.yml`
+* `conda env create --file environment.yml`
 * `conda activate cmorl_env`
 
 # Run training
