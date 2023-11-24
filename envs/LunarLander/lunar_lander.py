@@ -3,8 +3,10 @@ __credits__ = ["Andrea PIERRÉ"]
 import math
 import warnings
 from typing import TYPE_CHECKING, Optional
+from cmorl.utils.reward_utils import CMORL, RewardFnType
 
 import numpy as np
+import tensorflow as tf
 
 import gymnasium as gym
 from gymnasium import error, spaces
@@ -55,6 +57,40 @@ MAIN_ENGINE_Y_LOCATION = (
 
 VIEWPORT_W = 600
 VIEWPORT_H = 400
+
+def multi_dim_reward(state, action, env: "LunarLander"):
+    reward = 0
+    # np.sqrt(state[0]**2.0 + state[1]**2.0)/ np.sqrt(self.observation_space.high[0] * self.observation_space.high[0] + self.observation_space.high[1] * self.observation_space.high[1])
+    dist_x = np.clip((1.0 - 3*np.abs(state[0])/env.observation_space.high[0]), 0.0, 1.0)
+    dist_y = np.clip((1.0 - np.abs(state[1])/env.observation_space.high[1]), 0.0, 1.0)
+    near_ground = dist_y if dist_y > 0.5 else 0.0
+    # # dist_from_landing = (1.0 - np.linalg.norm(state[0:2])/np.linalg.norm(self.observation_space.high[0:2]))**2.0
+    # speed = np.clip((1.0 - np.linalg.norm(state[2:4])/np.linalg.norm(self.observation_space.high[2:4])), 0.0, 1.0)
+    # slow_near_ground = speed if dist_y > 0.0 else 0.0
+    # angle = (1.0 - normed_angular_distance(state[4], 0.0))**1.5
+    # angular_velocity = np.clip(1.0 - np.abs(state[5])/np.abs(self.observation_space.high[5]), 0.0, 1.0)
+    # touching_ground = min(state[6],state[7])
+    # # near_ground =  0.0
+    # rw1 = p_mean(np.array([dist_x, dist_y, angle, speed**2.0]), p=0.0)[0]
+    # rw2 = p_mean(np.array([dist_x**2.0, dist_y**2.0, angle, touching_ground, speed**3.0]), p=0.0)[0]
+    # # reward = rw1*0.2 if dist_y < 0.5 else rw2
+    # # reward = 0.5*p_mean(np.array([dist_x, dist_y**1.5, angle, speed**1.5]), p=0.0)[0]+0.1*angular_velocity+0.2*min(state[6],state[7])+0.2*slow_near_ground
+    # stopped = 1.0 if speed < 0.1 else 0.3
+    first_leg = 0.1 + 0.9*state[6]
+    second_leg = 0.1 + 0.9*state[7]
+    
+
+    return np.array([dist_x**2.0, dist_y**2.0, first_leg, second_leg])
+
+def composed_reward_fn(state, action, env):
+    return p_mean(multi_dim_reward(state, action, env), p=0.0)[0]
+
+
+@tf.function
+def q_composer(q_values):
+    qs_c = tf.reduce_mean(q_values, axis=0)
+    q_c = p_mean(qs_c, p=-4.0)
+    return qs_c, q_c
 
 def normed_angular_distance(a, b):
     diff = ( b - a + np.pi ) % (2 * np.pi) - np.pi
@@ -236,6 +272,7 @@ class LunarLander(gym.Env, EzPickle):
         enable_wind: bool = False,
         wind_power: float = 15.0,
         turbulence_power: float = 1.5,
+        reward_fn: RewardFnType = multi_dim_reward,
     ):
         EzPickle.__init__(
             self,
@@ -332,6 +369,8 @@ class LunarLander(gym.Env, EzPickle):
             self.action_space = spaces.Discrete(4)
 
         self.render_mode = render_mode
+        reward_dim = reward_fn(self.observation_space.sample(), self.action_space.sample(), self).shape[0]
+        self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
 
     def _destroy(self):
         if not self.moon:
@@ -647,27 +686,6 @@ class LunarLander(gym.Env, EzPickle):
             1.0 if self.legs[1].ground_contact else 0.0,
         ]
         assert len(state) == 8
-
-        reward = 0
-        # np.sqrt(state[0]**2.0 + state[1]**2.0)/ np.sqrt(self.observation_space.high[0] * self.observation_space.high[0] + self.observation_space.high[1] * self.observation_space.high[1])
-        dist_x = np.clip((1.0 - 3*np.abs(state[0])/self.observation_space.high[0]), 0.0, 1.0)
-        dist_y = np.clip((1.0 - np.abs(state[1])/self.observation_space.high[1]), 0.0, 1.0)
-        near_ground = dist_y if dist_y > 0.5 else 0.0
-        # # dist_from_landing = (1.0 - np.linalg.norm(state[0:2])/np.linalg.norm(self.observation_space.high[0:2]))**2.0
-        # speed = np.clip((1.0 - np.linalg.norm(state[2:4])/np.linalg.norm(self.observation_space.high[2:4])), 0.0, 1.0)
-        # slow_near_ground = speed if dist_y > 0.0 else 0.0
-        # angle = (1.0 - normed_angular_distance(state[4], 0.0))**1.5
-        # angular_velocity = np.clip(1.0 - np.abs(state[5])/np.abs(self.observation_space.high[5]), 0.0, 1.0)
-        # touching_ground = min(state[6],state[7])
-        # # near_ground =  0.0
-        # rw1 = p_mean(np.array([dist_x, dist_y, angle, speed**2.0]), p=0.0)[0]
-        # rw2 = p_mean(np.array([dist_x**2.0, dist_y**2.0, angle, touching_ground, speed**3.0]), p=0.0)[0]
-        # # reward = rw1*0.2 if dist_y < 0.5 else rw2
-        # # reward = 0.5*p_mean(np.array([dist_x, dist_y**1.5, angle, speed**1.5]), p=0.0)[0]+0.1*angular_velocity+0.2*min(state[6],state[7])+0.2*slow_near_ground
-        # stopped = 1.0 if speed < 0.1 else 0.3
-        first_leg = 0.1 + 0.9*state[6]
-        second_leg = 0.1 + 0.9*state[7]
-        reward = p_mean(np.array([dist_x**2.0, dist_y**2.0, first_leg, second_leg]), p=0.0)[0]
         # reward = p_mean(np.array([dist_x, near_ground, angle, touching_ground, speed**1.5]), p=0.5)[0]
 
         # print("dist_x:", dist_x)
@@ -687,7 +705,9 @@ class LunarLander(gym.Env, EzPickle):
 
         if self.render_mode == "human":
             self.render()
+        reward = self.cmorl(state, action, self)
         return np.array(state, dtype=np.float32), reward, terminated, False, {}
+
 
     def render(self):
         if self.render_mode is None:
