@@ -97,10 +97,17 @@ class PendulumEnv(gym.Env):
         "render_fps": 60,
     }
 
-    def __init__(self, render_mode: Optional[str] = None, g=10.0, screen=None, setpoint=0.0):
+    def __init__(
+        self,
+        render_mode: Optional[str] = None,
+        g=10.0,
+        screen=None,
+        setpoint=0.0,
+        single_reward=True,
+    ):
         self.max_speed = 8
         self.max_torque = 2.0
-        self.dt = 1.0/20.0
+        self.dt = 1.0 / 20.0
         self.g = g
         self.m = 1.0
         self.l = 1.0
@@ -112,6 +119,7 @@ class PendulumEnv(gym.Env):
         self.screen = screen
         self.clock = None
         self.isopen = True
+        self.single_reward = single_reward
 
         high = np.array([1.0, 1.0, self.max_speed], dtype=np.float32)
         # This will throw a warning in tests/envs/test_envs in utils/env_checker.py as the space is not symmetric
@@ -134,7 +142,13 @@ class PendulumEnv(gym.Env):
         self.last_u = u  # for rendering
         angle_rw = 1.0 - normed_angular_distance(th, self.setpoint)
 
-        # This is the integrated dynamics of the pendulum in physics. 
+        # Normalizing the torque to be in the range [0, 1]
+        normalized_u = u / self.max_torque
+        normalized_u = abs(normalized_u)
+        # Merge the angle reward and the normalized torque into a single reward vector
+        rw_vec = np.array([angle_rw, 1 - normalized_u], dtype=np.float32)
+
+        # This is the integrated dynamics of the pendulum in physics.
         # we need to write a tensorflow version of this
         newthdot = thdot + (3 * g / (2 * l) * np.sin(th) + 3.0 / (m * l**2) * u) * dt
         newthdot = np.clip(newthdot, -self.max_speed, self.max_speed)
@@ -144,7 +158,12 @@ class PendulumEnv(gym.Env):
 
         if self.render_mode == "human":
             self.render()
-        return self._get_obs(), angle_rw, False, False, {}
+        # TODO: add a case for geometric mean reward
+        if self.single_reward:
+            reward = angle_rw
+        else:
+            reward = rw_vec
+        return self._get_obs(), reward, False, False, {}
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
@@ -278,5 +297,5 @@ class PendulumEnv(gym.Env):
 
 
 def normed_angular_distance(a, b):
-    diff = ( b - a + np.pi ) % (2 * np.pi) - np.pi
-    return  np.abs(diff + 2*np.pi if diff < -np.pi else diff)/np.pi
+    diff = (b - a + np.pi) % (2 * np.pi) - np.pi
+    return np.abs(diff + 2 * np.pi if diff < -np.pi else diff) / np.pi
