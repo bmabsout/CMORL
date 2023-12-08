@@ -10,9 +10,43 @@ from gymnasium import spaces
 from gymnasium.envs.classic_control import utils
 from gymnasium.error import DependencyNotInstalled
 
+import tensorflow as tf
+from cmorl.utils.loss_composition import p_mean
+from cmorl.utils.reward_utils import CMORL, RewardFnType
+
 
 DEFAULT_X = np.pi
 DEFAULT_Y = 1.0
+
+
+def multi_dim_reward(state, action, env: "PendulumEnv"):
+    u = action
+    # x, y, thdot = state  # th := theta
+    # th = np.arctan2(y, x)
+    th, thdot = state  # th := theta
+    angle_rw = 1.0 - normed_angular_distance(th, env.setpoint)
+
+    # Normalizing the torque to be in the range [0, 1]
+    normalized_u = u / env.max_torque
+    normalized_u = abs(normalized_u)
+    actuation_rw = 1.0 - normalized_u
+    # check if actuation_rw is an array or a scalar
+    if isinstance(u, np.ndarray):
+        actuation_rw = actuation_rw[0]
+    # Merge the angle reward and the normalized torque into a single reward vector
+    rw_vec = np.array([angle_rw, actuation_rw], dtype=np.float32)
+    return rw_vec
+
+
+def composed_reward_fn(state, action, env: "PendulumEnv"):
+    return multi_dim_reward(state, action, env)[0:1]
+
+
+@tf.function
+def q_composer(q_values):
+    qs_c = tf.reduce_mean(q_values, axis=0)
+    q_c = p_mean(qs_c, p=-4.0)
+    return qs_c, q_c
 
 
 class PendulumEnv(gym.Env):
@@ -103,7 +137,7 @@ class PendulumEnv(gym.Env):
         g=10.0,
         screen=None,
         setpoint=0.0,
-        single_reward=True,
+        reward_fn: RewardFnType = composed_reward_fn,
     ):
         self.max_speed = 8
         self.max_torque = 2.0
@@ -119,7 +153,6 @@ class PendulumEnv(gym.Env):
         self.screen = screen
         self.clock = None
         self.isopen = True
-        self.single_reward = single_reward
 
         high = np.array([1.0, 1.0, self.max_speed], dtype=np.float32)
         # This will throw a warning in tests/envs/test_envs in utils/env_checker.py as the space is not symmetric
@@ -129,6 +162,11 @@ class PendulumEnv(gym.Env):
             low=-self.max_torque, high=self.max_torque, shape=(1,), dtype=np.float32
         )
         self.observation_space = spaces.Box(low=-high, high=high, dtype=np.float32)
+
+        reward_dim = reward_fn(
+            self.observation_space.sample()[0:2], self.action_space.sample(), self
+        ).shape[0]
+        self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
 
     def step(self, u):
         th, thdot = self.state  # th := theta
@@ -140,13 +178,6 @@ class PendulumEnv(gym.Env):
 
         u = np.clip(u, -self.max_torque, self.max_torque)[0]
         self.last_u = u  # for rendering
-        angle_rw = 1.0 - normed_angular_distance(th, self.setpoint)
-
-        # Normalizing the torque to be in the range [0, 1]
-        normalized_u = u / self.max_torque
-        normalized_u = abs(normalized_u)
-        # Merge the angle reward and the normalized torque into a single reward vector
-        rw_vec = np.array([angle_rw, 1 - normalized_u], dtype=np.float32)
 
         # This is the integrated dynamics of the pendulum in physics.
         # we need to write a tensorflow version of this
@@ -158,11 +189,8 @@ class PendulumEnv(gym.Env):
 
         if self.render_mode == "human":
             self.render()
-        # TODO: add a case for geometric mean reward
-        if self.single_reward:
-            reward = angle_rw
-        else:
-            reward = rw_vec
+
+        reward = self.cmorl(self.state, u, self)
         return self._get_obs(), reward, False, False, {}
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):

@@ -1,5 +1,5 @@
 import numpy as np
-from .Pendulum import PendulumEnv
+from Pendulum import PendulumEnv
 import argparse
 from cmorl.utils import test_utils
 import time
