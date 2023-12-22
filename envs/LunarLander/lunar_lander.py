@@ -58,11 +58,14 @@ MAIN_ENGINE_Y_LOCATION = (
 VIEWPORT_W = 600
 VIEWPORT_H = 400
 
+
 def multi_dim_reward(state, action, env: "LunarLander"):
     reward = 0
     # np.sqrt(state[0]**2.0 + state[1]**2.0)/ np.sqrt(self.observation_space.high[0] * self.observation_space.high[0] + self.observation_space.high[1] * self.observation_space.high[1])
-    dist_x = np.clip((1.0 - 3*np.abs(state[0])/env.observation_space.high[0]), 0.0, 1.0)
-    dist_y = np.clip((1.0 - np.abs(state[1])/env.observation_space.high[1]), 0.0, 1.0)
+    dist_x = np.clip(
+        (1.0 - 3 * np.abs(state[0]) / env.observation_space.high[0]), 0.0, 1.0
+    )
+    dist_y = np.clip((1.0 - np.abs(state[1]) / env.observation_space.high[1]), 0.0, 1.0)
     near_ground = dist_y if dist_y > 0.5 else 0.0
     # # dist_from_landing = (1.0 - np.linalg.norm(state[0:2])/np.linalg.norm(self.observation_space.high[0:2]))**2.0
     # speed = np.clip((1.0 - np.linalg.norm(state[2:4])/np.linalg.norm(self.observation_space.high[2:4])), 0.0, 1.0)
@@ -76,14 +79,14 @@ def multi_dim_reward(state, action, env: "LunarLander"):
     # # reward = rw1*0.2 if dist_y < 0.5 else rw2
     # # reward = 0.5*p_mean(np.array([dist_x, dist_y**1.5, angle, speed**1.5]), p=0.0)[0]+0.1*angular_velocity+0.2*min(state[6],state[7])+0.2*slow_near_ground
     # stopped = 1.0 if speed < 0.1 else 0.3
-    first_leg = 0.1 + 0.9*state[6]
-    second_leg = 0.1 + 0.9*state[7]
-    
+    first_leg = 0.1 + 0.9 * state[6]
+    second_leg = 0.1 + 0.9 * state[7]
 
     return np.array([dist_x**2.0, dist_y**2.0, first_leg, second_leg])
 
+
 def composed_reward_fn(state, action, env):
-    return p_mean(multi_dim_reward(state, action, env), p=0.0)[0]
+    return p_mean(multi_dim_reward(state, action, env), p=0.0)[0:1]
 
 
 @tf.function
@@ -92,9 +95,11 @@ def q_composer(q_values):
     q_c = p_mean(qs_c, p=-4.0)
     return qs_c, q_c
 
+
 def normed_angular_distance(a, b):
-    diff = ( b - a + np.pi ) % (2 * np.pi) - np.pi
-    return  np.abs(diff + 2*np.pi if diff < -np.pi else diff)/np.pi
+    diff = (b - a + np.pi) % (2 * np.pi) - np.pi
+    return np.abs(diff + 2 * np.pi if diff < -np.pi else diff) / np.pi
+
 
 class ContactDetector(contactListener):
     def __init__(self, env):
@@ -369,7 +374,9 @@ class LunarLander(gym.Env, EzPickle):
             self.action_space = spaces.Discrete(4)
 
         self.render_mode = render_mode
-        reward_dim = reward_fn(self.observation_space.sample(), self.action_space.sample(), self).shape[0]
+        reward_dim = reward_fn(
+            self.observation_space.sample(), self.action_space.sample(), self
+        ).shape[0]
         self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
 
     def _destroy(self):
@@ -698,7 +705,11 @@ class LunarLander(gym.Env, EzPickle):
 
         # print("reward", reward)
         terminated = False
-        if self.game_over or abs(state[0]) >= 1.0 or normed_angular_distance(state[4], 0.0) > 0.4:
+        if (
+            self.game_over
+            or abs(state[0]) >= 1.0
+            or normed_angular_distance(state[4], 0.0) > 0.4
+        ):
             terminated = True
         # if not self.lander.awake:
         #     terminated = True
@@ -707,7 +718,6 @@ class LunarLander(gym.Env, EzPickle):
             self.render()
         reward = self.cmorl(state, action, self)
         return np.array(state, dtype=np.float32), reward, terminated, False, {}
-
 
     def render(self):
         if self.render_mode is None:

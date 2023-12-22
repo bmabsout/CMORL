@@ -44,8 +44,10 @@ def composed_reward_fn(state, action, env: "PendulumEnv"):
 
 @tf.function
 def q_composer(q_values):
+    q1_c = tf.reduce_mean(q_values[:, 0]) ** 2
+    q2_c = tf.reduce_mean(q_values[:, 1])
     qs_c = tf.reduce_mean(q_values, axis=0)
-    q_c = p_mean(qs_c, p=-4.0)
+    q_c = p_mean(tf.stack([q1_c, q2_c]), p=-4.0)
     return qs_c, q_c
 
 
@@ -137,7 +139,8 @@ class PendulumEnv(gym.Env):
         g=10.0,
         screen=None,
         setpoint=0.0,
-        reward_fn: RewardFnType = composed_reward_fn,
+        # reward_fn: RewardFnType = composed_reward_fn,
+        reward_fn: RewardFnType = multi_dim_reward,
     ):
         self.max_speed = 8
         self.max_torque = 2.0
