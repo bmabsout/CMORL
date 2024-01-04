@@ -6,7 +6,7 @@ import pickle
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
 from cmorl.utils import args_utils
 from cmorl.utils import train_utils
-import lunar_lander
+from . import lunar_lander
 import tensorflow as tf
 
 
