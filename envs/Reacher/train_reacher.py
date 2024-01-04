@@ -6,7 +6,7 @@ import pickle
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
 from cmorl.utils import args_utils
 from cmorl.utils import train_utils
-import reacher
+from . import reacher
 
 reacher_serializer = lambda: args_utils.Arg_Serializer.join(args_utils.Arg_Serializer(
     abbrev_to_args= {
