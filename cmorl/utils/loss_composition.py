@@ -66,3 +66,8 @@ def move_toward_zero(x):
         return -dy * x * x * x * 5.0
 
     return tf.sigmoid(-tf.abs(x) + 5), grad
+
+
+@tf.function
+def sigmoid_regularizer(x):
+    return tf.where(tf.abs(x) > 3, tf.abs(x), 0)
