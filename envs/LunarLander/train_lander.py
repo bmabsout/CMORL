@@ -39,7 +39,7 @@ def train(cmd_args, hp, serializer):
 
 if __name__ == "__main__":
     steps_per_epoch = 1000
-    epochs = 400
+    epochs = 250
     total_steps = epochs * steps_per_epoch
     serializer = lander_serializer(
         epochs=epochs,
@@ -57,9 +57,9 @@ if __name__ == "__main__":
             "obs_normalizer": lunar_lander.LunarLander().observation_space.high,
         },
         start_steps=1000,
-        # replay_size=int(1e6),
-        replay_size=int(1e5),
-        gamma=0.99,
+        replay_size=int(1e6),
+        # replay_size=int(1e4),
+        gamma=0.97,
         polyak=0.5,
         # pi_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),
         # q_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),

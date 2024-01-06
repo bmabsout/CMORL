@@ -1,6 +1,7 @@
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
 from cmorl.utils import args_utils
 from Pendulum import PendulumEnv
+import Pendulum
 
 
 def parse_args_and_train(args=None):
@@ -19,7 +20,9 @@ def parse_args_and_train(args=None):
     generated_params = train_utils.create_train_folder_and_params(
         "Pendulum-custom", hp, cmd_args, serializer
     )
-    env_fn = lambda: PendulumEnv(g=10.0, setpoint=0.0)
+    env_fn = lambda: PendulumEnv(
+        g=10.0, setpoint=0.0, reward_fn=Pendulum.multi_dim_reward
+    )
     ddpg(env_fn, **generated_params)
 
 

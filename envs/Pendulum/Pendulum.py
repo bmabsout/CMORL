@@ -44,10 +44,11 @@ def composed_reward_fn(state, action, env: "PendulumEnv"):
 
 @tf.function
 def q_composer(q_values):
-    q1_c = tf.reduce_mean(q_values[:, 0]) ** 2
-    q2_c = tf.reduce_mean(q_values[:, 1])
+    q1_c = q_values[0] ** 2
+    q2_c = q_values[1]
+    q_values = tf.stack([q1_c, q2_c], axis=0)
     qs_c = tf.reduce_mean(q_values, axis=0)
-    q_c = p_mean(tf.stack([q1_c, q2_c]), p=-4.0)
+    q_c = p_mean(qs_c, p=-4.0)
     return qs_c, q_c
 
 

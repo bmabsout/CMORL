@@ -7,7 +7,12 @@ import gymnasium as gym
 import time
 from cmorl.rl_algs.ddpg import core
 from cmorl.utils.logx import TensorflowLogger
-from cmorl.utils.loss_composition import p_mean, scale_gradient, move_toward_zero
+from cmorl.utils.loss_composition import (
+    p_mean,
+    scale_gradient,
+    move_toward_zero,
+    sigmoid_regularizer,
+)
 from cmorl.utils import args_utils
 from cmorl.utils import save_utils
 from functools import partial
@@ -202,7 +207,11 @@ def ddpg(
         pi_and_before_tanh.compile()
         # q_and_before_sigmoid = tf.keras.Model(
         #     q_network.input, {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output})
-
+        q_and_before_sigmoid = tf.keras.Model(
+            q_network.input,
+            {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output},
+        )
+        q_and_before_sigmoid.compile()
     # Target networks
     with tf.name_scope("target"):
         # Note that the action placeholder going to actor_critic here is
@@ -238,9 +247,11 @@ def ddpg(
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones):
         with tf.GradientTape() as tape:
-            q = q_network(tf.concat([obs1, acts], axis=-1))
             # q_squeezed = tf.squeeze(q, axis=1)
-
+            outputs = q_and_before_sigmoid(tf.concat([obs1, acts], axis=-1))
+            q = outputs["q"]
+            before_sigmoid = outputs["before_sigmoid"]
+            before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid), axis=1)
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
             # q_pi_targ_squeezed = tf.squeeze(q_pi_targ, axis=1)
@@ -255,7 +266,7 @@ def ddpg(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
             # q_loss = tf.reduce_mean((q - backup) ** 2, 0)  # -before_tanh_c*1e-5
-            q_loss = tf.reduce_mean((q - backup) ** 2)
+            q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
             # q_loss = p_mean(q_loss, p=2)
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
