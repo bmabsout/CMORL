@@ -35,6 +35,7 @@
         in pkgs.mkShell {
             buildInputs = [
                 pkgs.nixgl.auto.nixGLDefault
+                pkgs.nixgl.nixGLIntel
                 python
             ];
             shellHook = ''
