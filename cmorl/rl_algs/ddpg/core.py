@@ -42,7 +42,6 @@ def unscale_by_space(unscale_me, space):  # outputs [-0.5, 0.5]
 Actor-Critics
 """
 
-
 def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer):
     inputs = tf.keras.Input((obs_space.shape[0],))
     normalized_input = Lambda(lambda t: t / obs_normalizer)(inputs)
@@ -89,10 +88,10 @@ def critic(
 def mlp_actor_critic(
     obs_space: spaces.Box,
     act_space: spaces.Box,
+    rwds_dim: int,
     obs_normalizer=None,
     actor_hidden_sizes=(32, 32),
     critic_hidden_sizes=(256, 256),
-    rwds_dim=2,
 ) -> tuple[Model, Model]:
     if obs_normalizer is None:
         obs_normalizer = obs_space.high * 0.0 + 1.0

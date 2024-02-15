@@ -7,7 +7,12 @@ import gymnasium as gym
 import time
 from cmorl.rl_algs.ddpg import core
 from cmorl.utils.logx import TensorflowLogger
-from cmorl.utils.loss_composition import p_mean, scale_gradient, move_toward_zero
+from cmorl.utils.loss_composition import (
+    p_mean,
+    scale_gradient,
+    move_toward_zero,
+    sigmoid_regularizer,
+)
 from cmorl.utils import args_utils
 from cmorl.utils import save_utils
 from functools import partial
@@ -99,7 +104,6 @@ def ddpg(
     save_freq=1,
     on_save=lambda *_: (),
     extra_hyperparameters: dict[str, object] = {},
-    rew_dims=2,
 ):
     """
 
@@ -183,12 +187,13 @@ def ddpg(
     ), "only continuous action space is supported"
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
+    rew_dims = env.cmorl.dim
     max_q_val = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
 
     # Main outputs from computation graph
     with tf.name_scope("main"):
         pi_network, q_network = actor_critic(
-            env.observation_space, env.action_space, **hp.ac_kwargs
+            env.observation_space, env.action_space, rew_dims, **hp.ac_kwargs
         )
 
         # before_tanh_output = pi_network.layers[-1].output
@@ -202,13 +207,17 @@ def ddpg(
         pi_and_before_tanh.compile()
         # q_and_before_sigmoid = tf.keras.Model(
         #     q_network.input, {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output})
-
+        q_and_before_sigmoid = tf.keras.Model(
+            q_network.input,
+            {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output},
+        )
+        q_and_before_sigmoid.compile()
     # Target networks
     with tf.name_scope("target"):
         # Note that the action placeholder going to actor_critic here is
         # irrelevant, because we only need q_targ(s, pi_targ(s)).
         pi_targ_network, q_targ_network = actor_critic(
-            env.observation_space, env.action_space, **hp.ac_kwargs
+            env.observation_space, env.action_space, rew_dims, **hp.ac_kwargs
         )
 
     # make sure network and target network is using the same weights
@@ -217,7 +226,7 @@ def ddpg(
 
     # Experience buffer
     replay_buffer = ReplayBuffer(
-        obs_dim=obs_dim, act_dim=act_dim, size=hp.replay_size, rwds_dim=2
+        obs_dim=obs_dim, act_dim=act_dim, size=hp.replay_size, rwds_dim=rew_dims
     )
     # Separate train ops for pi, q
     pi_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.pi_lr)
@@ -238,9 +247,11 @@ def ddpg(
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones):
         with tf.GradientTape() as tape:
-            q = q_network(tf.concat([obs1, acts], axis=-1))
             # q_squeezed = tf.squeeze(q, axis=1)
-
+            outputs = q_and_before_sigmoid(tf.concat([obs1, acts], axis=-1))
+            q = outputs["q"]
+            before_sigmoid = outputs["before_sigmoid"]
+            before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid), axis=1)
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
             # q_pi_targ_squeezed = tf.squeeze(q_pi_targ, axis=1)
@@ -248,13 +259,14 @@ def ddpg(
             # rewards = tf.squeeze(rews, axis=1)
             # TODO: tf.tile -> search about it
             # dones = tf.tile(tf.expand_dims(dones, axis=-1), [1, rew_dims])
-            dones = tf.stack([dones, dones], axis=-1)
+            batch_size = tf.shape(dones)[0]
+            dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
 
             backup = tf.stop_gradient(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
             # q_loss = tf.reduce_mean((q - backup) ** 2, 0)  # -before_tanh_c*1e-5
-            q_loss = tf.reduce_mean((q - backup) ** 2)
+            q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
             # q_loss = p_mean(q_loss, p=2)
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
@@ -272,10 +284,7 @@ def ddpg(
             )
             #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            q1_c = tf.reduce_mean(q_values[:, 0]) ** 2
-            q2_c = tf.reduce_mean(q_values[:, 1])
-
-            q_c = p_mean(tf.stack([q1_c, q2_c]), p=-4.0)
+            qs_c, q_c = env.cmorl.q_composer(q_values)
 
             all_c = p_mean(
                 tf.stack(
@@ -292,7 +301,7 @@ def ddpg(
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
         grads_and_vars = zip(grads, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
-        return all_c, q1_c, q2_c, q_c, before_tanh_c
+        return all_c, qs_c, q_c, before_tanh_c
 
     def get_action(o, noise_scale):
         minus_1_to_1 = pi_network(tf.constant(o.reshape(1, -1))).numpy()[0]
@@ -372,16 +381,14 @@ def ddpg(
                 # Policy update
                 (
                     all_c,
-                    q1_c,
-                    q2_c,
+                    qs_c,
                     q_c,
                     before_tanh_c,
                 ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
 
                 logger.store(
                     All=all_c,
-                    Q1=q1_c,
-                    Q2=q2_c,
+                    Qs=qs_c,
                     Q=q_c,
                     Before_tanh=before_tanh_c,
                 )
@@ -391,7 +398,7 @@ def ddpg(
 
         if d or (ep_len == hp.max_ep_len):
             print(ep_ret)
-            logger.store(EpRet1=ep_ret[0], EpRet2=ep_ret[1], EpLen=ep_len)
+            logger.store(EpRet=ep_ret, EpLen=ep_len)
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -409,14 +416,12 @@ def ddpg(
 
             # Log info about epoch
             logger.log_tabular("Epoch", epoch)
-            logger.log_tabular("EpRet1", average_only=True)
-            logger.log_tabular("EpRet2", average_only=True)
+            logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             logger.log_tabular("Time", time.time() - start_time)
             logger.log_tabular("TotalEnvInteracts", t)
             logger.log_tabular("Before_tanh", average_only=True)
-            logger.log_tabular("Q1", average_only=True)
-            logger.log_tabular("Q2", average_only=True)
+            logger.log_tabular("Qs", average_only=True)
             logger.log_tabular("Q", average_only=True)
             logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
