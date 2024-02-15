@@ -28,7 +28,10 @@ if __name__ == "__main__":
     # import matplotlib.pyplot as plt
     cmd_args = parse_args()
     runs = test_utils.run_tests(
-        lunar_lander.LunarLander(render_mode="human" if cmd_args.render else None),
+        lunar_lander.LunarLander(
+            render_mode="human" if cmd_args.render else None,
+            reward_fn=lunar_lander.multi_dim_reward_sparse,
+        ),
         cmd_args,
     )
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")

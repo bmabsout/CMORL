@@ -7,11 +7,49 @@ from gymnasium.spaces import Box
 
 DEFAULT_CAMERA_CONFIG = {"trackbodyid": 0}
 
+import tensorflow as tf
+from cmorl.utils.loss_composition import p_mean
+from cmorl.utils.reward_utils import CMORL, RewardFnType
+
+
+def multi_dim_reward(state, action, env: "ReacherEnv"):
+    u = action
+    # x, y, thdot = state  # th := theta
+    # th = np.arctan2(y, x)
+    th, thdot = state  # th := theta
+    angle_rw = 1.0 - normed_angular_distance(th, env.setpoint)
+
+    # Normalizing the torque to be in the range [0, 1]
+    normalized_u = u / env.max_torque
+    normalized_u = abs(normalized_u)
+    actuation_rw = 1.0 - normalized_u
+    # check if actuation_rw is an array or a scalar
+    if isinstance(u, np.ndarray):
+        actuation_rw = actuation_rw[0]
+    # Merge the angle reward and the normalized torque into a single reward vector
+    rw_vec = np.array([angle_rw, actuation_rw], dtype=np.float32)
+    return rw_vec
+
+
+def composed_reward_fn(state, action, env):
+    return p_mean(multi_dim_reward(state, action, env), p=0.0)[0:1]
+
+
+@tf.function
+def q_composer(q_values):
+    q1_c = q_values[0] ** 2
+    q2_c = q_values[1]
+    q_values = tf.stack([q1_c, q2_c], axis=0)
+    qs_c = tf.reduce_mean(q_values, axis=0)
+    q_c = p_mean(qs_c, p=-4.0)
+    return qs_c, q_c
+
 
 def sample_point_in_circle(np_random, radius, bias=0.0):
-    angle = np_random.uniform()*np.pi*2
-    r = radius*np_random.uniform()**(2.0**bias/2.0)
-    return r*np.sin(angle), r*np.cos(angle)
+    angle = np_random.uniform() * np.pi * 2
+    r = radius * np_random.uniform() ** (2.0**bias / 2.0)
+    return r * np.sin(angle), r * np.cos(angle)
+
 
 class ReacherEnv(MujocoEnv, utils.EzPickle):
     """
@@ -110,7 +148,13 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
         "render_fps": 50,
     }
 
-    def __init__(self, goal_distance=0.2, bias=0.0, **kwargs):
+    def __init__(
+        self,
+        goal_distance=0.2,
+        bias=0.0,
+        reward_fn: RewardFnType = multi_dim_reward,  # type: ignore
+        **kwargs
+    ):
         self.goal_distance = goal_distance
         self.bias = bias
         utils.EzPickle.__init__(self, goal_distance=goal_distance, bias=bias, **kwargs)
@@ -123,10 +167,16 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
             # default_camera_config=DEFAULT_CAMERA_CONFIG,
             **kwargs
         )
+        reward_dim = reward_fn(
+            self.observation_space.sample(), self.action_space.sample(), self  # type: ignore
+        ).shape[  # type: ignore
+            0
+        ]  # type: ignore
+        self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
 
     def step(self, a):
         vec = self.get_body_com("fingertip") - self.get_body_com("target")
-        reward = np.clip(1.0-np.linalg.norm(vec)/0.4, 0.0, 1.0)**2.0
+        reward = np.clip(1.0 - np.linalg.norm(vec) / 0.4, 0.0, 1.0) ** 2.0
         # print(reward)
         # reward_ctrl = -np.square(a).sum()
         # reward = reward_dist + reward_ctrl
@@ -142,7 +192,7 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
             False,
             False,
             # dict(reward_dist=reward_dist, reward_ctrl=reward_ctrl),
-            {}
+            {},
         )
 
     def reset_model(self):
@@ -150,7 +200,9 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
             self.np_random.uniform(low=-0.1, high=0.1, size=self.model.nq)
             + self.init_qpos
         )
-        self.goal = sample_point_in_circle(self.np_random, self.goal_distance, self.bias)
+        self.goal = sample_point_in_circle(
+            self.np_random, self.goal_distance, self.bias
+        )
         qpos[-2:] = self.goal
         qvel = self.init_qvel + self.np_random.uniform(
             low=-0.005, high=0.005, size=self.model.nv

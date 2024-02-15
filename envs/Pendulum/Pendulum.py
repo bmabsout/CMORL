@@ -39,12 +39,14 @@ def multi_dim_reward(state, action, env: "PendulumEnv"):
 
 
 def composed_reward_fn(state, action, env: "PendulumEnv"):
-    return multi_dim_reward(state, action, env)[0:1]
+    rw_vec = multi_dim_reward(state, action, env)
+    p_mean(rw_vec, p=0.001)
+    return
 
 
 @tf.function
 def q_composer(q_values):
-    q1_c = q_values[0] ** 2
+    q1_c = q_values[0]
     q2_c = q_values[1]
     q_values = tf.stack([q1_c, q2_c], axis=0)
     qs_c = tf.reduce_mean(q_values, axis=0)

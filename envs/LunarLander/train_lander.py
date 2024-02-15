@@ -32,14 +32,14 @@ def train(cmd_args, hp, serializer):
         "lander-custom", hp, cmd_args, serializer
     )
     env_fn = lambda: lunar_lander.LunarLander(
-        reward_fn=lunar_lander.composed_reward_fn,
+        reward_fn=lunar_lander.multi_dim_reward_sparse,
     )
     ddpg(env_fn, save_freq=4, **generated_params)
 
 
 if __name__ == "__main__":
     steps_per_epoch = 1000
-    epochs = 250
+    epochs = 800
     total_steps = epochs * steps_per_epoch
     serializer = lander_serializer(
         epochs=epochs,
@@ -58,8 +58,7 @@ if __name__ == "__main__":
         },
         start_steps=1000,
         replay_size=int(1e6),
-        # replay_size=int(1e4),
-        gamma=0.97,
+        gamma=0.99,
         polyak=0.5,
         # pi_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),
         # q_lr=tf.optimizers.schedules.PolynomialDecay(1e-3, 50000, end_learning_rate=1e-5),

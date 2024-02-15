@@ -21,7 +21,7 @@ def parse_args_and_train(args=None):
         "Pendulum-custom", hp, cmd_args, serializer
     )
     env_fn = lambda: PendulumEnv(
-        g=10.0, setpoint=0.0, reward_fn=Pendulum.multi_dim_reward
+        g=10.0, setpoint=0.0, reward_fn=Pendulum.composed_reward_fn
     )
     ddpg(env_fn, **generated_params)
 
