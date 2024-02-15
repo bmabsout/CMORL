@@ -13,33 +13,24 @@ from cmorl.utils.reward_utils import CMORL, RewardFnType
 
 
 def multi_dim_reward(state, action, env: "ReacherEnv"):
-    u = action
-    # x, y, thdot = state  # th := theta
-    # th = np.arctan2(y, x)
-    th, thdot = state  # th := theta
-    angle_rw = 1.0 - normed_angular_distance(th, env.setpoint)
-
-    # Normalizing the torque to be in the range [0, 1]
-    normalized_u = u / env.max_torque
-    normalized_u = abs(normalized_u)
-    actuation_rw = 1.0 - normalized_u
-    # check if actuation_rw is an array or a scalar
-    if isinstance(u, np.ndarray):
-        actuation_rw = actuation_rw[0]
-    # Merge the angle reward and the normalized torque into a single reward vector
-    rw_vec = np.array([angle_rw, actuation_rw], dtype=np.float32)
+    vec = env.get_body_com("fingertip") - env.get_body_com("target")
+    reward_performance = np.clip(1.0 - np.linalg.norm(vec) / 0.4, 0.0, 1.0) ** 2.0
+    reward_actuation = 1 - np.square(action).sum() / 2
+    rw_vec = np.array([reward_performance, reward_actuation], dtype=np.float32)
     return rw_vec
 
 
 def composed_reward_fn(state, action, env):
-    return p_mean(multi_dim_reward(state, action, env), p=0.0)[0:1]
+    rew_vec = multi_dim_reward(state, action, env)
+    reward = p_mean(rew_vec, p=0.0)
+    return reward
 
 
 @tf.function
 def q_composer(q_values):
-    q1_c = q_values[0] ** 2
-    q2_c = q_values[1]
-    q_values = tf.stack([q1_c, q2_c], axis=0)
+    # q1_c = q_values[0] ** 2
+    # q2_c = q_values[1]
+    # q_values = tf.stack([q1_c, q2_c], axis=0)
     qs_c = tf.reduce_mean(q_values, axis=0)
     q_c = p_mean(qs_c, p=-4.0)
     return qs_c, q_c
@@ -174,20 +165,15 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
         ]  # type: ignore
         self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
 
-    def step(self, a):
-        vec = self.get_body_com("fingertip") - self.get_body_com("target")
-        reward = np.clip(1.0 - np.linalg.norm(vec) / 0.4, 0.0, 1.0) ** 2.0
-        # print(reward)
-        # reward_ctrl = -np.square(a).sum()
-        # reward = reward_dist + reward_ctrl
-
-        self.do_simulation(a, self.frame_skip)
+    def step(self, action):
+        self.do_simulation(action, self.frame_skip)
         if self.render_mode == "human":
             self.render()
 
-        ob = self._get_obs()
+        obs = self._get_obs()
+        reward = self.cmorl(obs, action, self)
         return (
-            ob,
+            obs,
             reward,
             False,
             False,

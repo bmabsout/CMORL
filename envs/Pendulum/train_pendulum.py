@@ -8,7 +8,7 @@ def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=10, learning_rate=1e-4)
+    serializer = args_utils.default_serializer(epochs=5, learning_rate=1e-4)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams(
         epochs=cmd_args.epochs,
@@ -21,7 +21,7 @@ def parse_args_and_train(args=None):
         "Pendulum-custom", hp, cmd_args, serializer
     )
     env_fn = lambda: PendulumEnv(
-        g=10.0, setpoint=0.0, reward_fn=Pendulum.composed_reward_fn
+        g=10.0, setpoint=0.0, reward_fn=Pendulum.multi_dim_reward
     )
     ddpg(env_fn, **generated_params)
 
