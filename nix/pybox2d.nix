@@ -10,7 +10,7 @@ pkgs.python3.pkgs.buildPythonPackage rec {
       rev = "master";
       sha256 = "a4JjUrsSbAv9SjqZLwuqXhz2x2YhRzZZTytu4X5YWX8=";
   };
-  nativeBuildInputs = [ pkgs.pkgconfig pkgs.swig ];
+  nativeBuildInputs = [ pkgs.pkg-config pkgs.swig ];
   doCheck = false;
   format="setuptools";
 }

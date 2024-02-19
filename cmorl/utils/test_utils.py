@@ -2,7 +2,6 @@ from pathlib import Path
 from cmorl.utils import save_utils
 import numpy as np
 
-
 def test(actor, env, seed=123, render=True, num_steps=100):
     o, i = env.reset(seed=seed)
     high = env.action_space.high
@@ -31,12 +30,9 @@ def test(actor, env, seed=123, render=True, num_steps=100):
 
 
 def folder_to_results(env, render, num_tests, folder_path, steps=100, **kwargs):
-    import tensorflow as tf
-
-    saved = tf.saved_model.load(str(Path(folder_path, "actor")))
+    saved = save_utils.load_actor(folder_path)
 
     def actor(x):
-        # print(np.array([x], dtype=np.float32))
         return saved(np.array([x], dtype=np.float32))[0]
 
     runs = np.array(

@@ -1,10 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # mach-nix.url = "github:DavHau/mach-nix/master";
-    # mach-nix.inputs.nixpkgs.follows = "nixpkgs";
-    # mach-nix.inputs.pypi-deps-db.follows = "pypi-deps-db";
-    # pypi-deps-db.url = "github:DavHau/pypi-deps-db";
     nixgl.url = "github:guibou/nixGL";
     nixgl.inputs.nixpkgs.follows = "nixpkgs";
     flake-compat = {

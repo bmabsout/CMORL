@@ -18,6 +18,8 @@ buildPythonPackage rec {
     tensorflow
     tqdm
     keras
+    dm-tree
+    rich
     (callPackage ./pybox2d.nix {})
     (callPackage ./mujoco-py.nix {})
   ];

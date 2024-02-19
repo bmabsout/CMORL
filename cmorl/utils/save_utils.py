@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 import time
-from tensorflow.keras import models, Model
+from keras import models, Model
 import pickle
 from cmorl.utils.args_utils import Arg_Serializer, Serialized_Argument
 from pathlib import Path
@@ -30,17 +30,18 @@ def get_last_epoch_path_for_each_seed_folder(path):
     return [latest_subdir(str(d)) for d in Path(path).glob('seeds/*/epochs/')]
 
 
-def find_folders(dirname, name_to_find) -> list[str]:
-    subfolders = [f.path for f in os.scandir(
-        dirname) if f.is_dir()]
-    subfolders_with_the_right_name = [ subfolder for subfolder in subfolders if Path(subfolder).name == name_to_find]
-    for dirname in list(subfolders):
-        subfolders_with_the_right_name.extend(find_folders(dirname, name_to_find))
-    return subfolders_with_the_right_name
+def find_files(dirname, name_to_find) -> list[str]:
+    files_with_the_right_name = []
+    for dir_entry in os.scandir(dirname):
+        if dir_entry.is_dir():
+            files_with_the_right_name.extend(find_files(dir_entry.path, name_to_find))
+        elif Path(dir_entry.path).name == name_to_find:
+            files_with_the_right_name.append(Path(dir_entry.path))
+    return files_with_the_right_name
 
 
 def find_all_train_paths(path):
-    return [Path(folder).parent for folder in find_folders(path, "actor")]
+    return [Path(folder).parent for folder in find_files(path, "actor.keras")]
 
 
 def latest_train_folder(path):
@@ -52,17 +53,19 @@ def concatenate_lists(list_of_lists):
 
 
 def on_save(actor: Model, q_network: Model, epoch:int, replay_buffer, replay_save:bool, save_path:str):
-    actor.save(Path(save_path, str(epoch), "actor"))
-    q_network.save(Path(save_path, str(epoch), "critic"))
+    epoch_path = Path(save_path, str(epoch))
+    os.makedirs(epoch_path, exist_ok=True)
+    actor.save(epoch_path / "actor.keras")
+    q_network.save(epoch_path / "critic.keras")
     if replay_save:
         with open( Path(save_path, "replay.p"), "wb" ) as replay_file:
             pickle.dump( replay_buffer, replay_file)
 
 def load_critic(folder):
-    return models.load_model(Path(folder, "critic"))
+    return models.load_model(Path(folder, "critic.keras"))
 
 def load_actor(folder):
-    return models.load_model(Path(folder, "actor"))
+    return models.load_model(Path(folder, "actor.keras"))
 
 def load_replay(folder):
     return pickle.load(open(Path(folder, "replay.p"), "rb"))

@@ -1,8 +1,7 @@
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Dict, NamedTuple
+from typing import Any, Callable, Dict
 import numpy as np
 import tensorflow as tf
-import pickle
 import gymnasium as gym
 import time
 from cmorl.rl_algs.ddpg import core
@@ -13,9 +12,7 @@ from cmorl.utils.loss_composition import (
     move_toward_zero,
     sigmoid_regularizer,
 )
-from cmorl.utils import args_utils
-from cmorl.utils import save_utils
-from functools import partial
+import keras
 
 # adapted from https://github.com/tanzhenyu/spinup-tf2/blob/master/spinup/algos/ddpg/ddpg.py
 
@@ -200,14 +197,14 @@ def ddpg(
         print(pi_network.output)
         print(pi_network.layers[-2].output)
         print(pi_network.input)
-        pi_and_before_tanh = tf.keras.Model(
+        pi_and_before_tanh = keras.Model(
             pi_network.input,
             {"pi": pi_network.output, "before_tanh": pi_network.layers[-2].output},
         )
         pi_and_before_tanh.compile()
-        # q_and_before_sigmoid = tf.keras.Model(
+        # q_and_before_sigmoid = keras.Model(
         #     q_network.input, {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output})
-        q_and_before_sigmoid = tf.keras.Model(
+        q_and_before_sigmoid = keras.Model(
             q_network.input,
             {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output},
         )
@@ -229,8 +226,8 @@ def ddpg(
         obs_dim=obs_dim, act_dim=act_dim, size=hp.replay_size, rwds_dim=rew_dims
     )
     # Separate train ops for pi, q
-    pi_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.pi_lr)
-    q_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.q_lr)
+    pi_optimizer = keras.optimizers.Adam(learning_rate=hp.pi_lr)
+    q_optimizer = keras.optimizers.Adam(learning_rate=hp.q_lr)
 
     # Polyak averaging for target variables
     @tf.function
