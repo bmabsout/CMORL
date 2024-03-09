@@ -30,7 +30,7 @@ if __name__ == "__main__":
     runs = test_utils.run_tests(
         lunar_lander.LunarLander(
             render_mode="human" if cmd_args.render else None,
-            reward_fn=lunar_lander.composed_reward_fn,
+            reward_fn=lunar_lander.multi_dim_reward,
         ),
         cmd_args,
     )

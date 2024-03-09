@@ -67,4 +67,5 @@ def train(cmd_args, serializer):
 if __name__ == "__main__":
     serializer = reacher_serializer()
     cmd_args = args_utils.parse_arguments(serializer)
+    cmd_args.epochs = 20
     train(cmd_args, serializer)

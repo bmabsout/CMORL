@@ -81,12 +81,12 @@ def multi_dim_reward(state: spaces.Box, action: spaces.Box, env: "LunarLander"):
     first_leg = 0.1 + 0.9 * state[6]  # type: ignore
     second_leg = 0.1 + 0.9 * state[7]  # type: ignore
 
-    return np.array([dist_x**2.0, dist_y**2.0, first_leg, second_leg])
+    return np.array([dist_x**2, dist_y**2, first_leg**0.5, second_leg**0.5])
 
 
 def composed_reward_fn(state: spaces.Box, action: spaces.Box, env: "LunarLander"):
     rew_vec = multi_dim_reward(state, action, env)
-    reward = p_mean(rew_vec, p=0.0)
+    reward = p_mean(rew_vec, p=-4.0)
     return reward
 
 

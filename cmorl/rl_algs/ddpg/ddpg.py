@@ -282,7 +282,6 @@ def ddpg(
             #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
             qs_c, q_c = env.cmorl.q_composer(q_values)
-
             all_c = p_mean(
                 tf.stack(
                     [
@@ -292,6 +291,7 @@ def ddpg(
                 ),
                 p=0.0,
             )
+            # print(qs_c.shape, q_c.shape, all_c.shape)
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if debug:
@@ -383,19 +383,27 @@ def ddpg(
                     before_tanh_c,
                 ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
 
+                qs_c = qs_c.numpy()
                 logger.store(
-                    All=all_c,
-                    Qs=qs_c,
-                    Q=q_c,
+                    # All=all_c,
+                    Q_comp=q_c,
                     Before_tanh=before_tanh_c,
                 )
+                qs_dict_ = {}
+                for i, q in enumerate(qs_c):
+                    qs_dict_[f"Q{i}"] = q
+                logger.store(**qs_dict_)
 
                 # target update
                 target_update()
 
         if d or (ep_len == hp.max_ep_len):
-            print(ep_ret)
-            logger.store(EpRet=ep_ret, EpLen=ep_len)
+            # print(ep_ret)
+            ret_dict_ = {}
+            for i in range(rew_dims):
+                ret_dict_[f"EpRet_{i}"] = ep_ret[i]
+            logger.store(**ret_dict_)
+            logger.store(EpLen=ep_len)
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -412,17 +420,21 @@ def ddpg(
             # test_agent()
 
             # Log info about epoch
-            logger.log_tabular("Epoch", epoch)
-            logger.log_tabular("EpRet", average_only=True)
+            # logger.log_tabular("Epoch", epoch)
+            logger.log_tabular("Episode", epoch)
+            # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
+            for i in range(rew_dims):
+                logger.log_tabular(f"EpRet_{i}", average_only=True)
             logger.log_tabular("Time", time.time() - start_time)
             logger.log_tabular("TotalEnvInteracts", t)
-            logger.log_tabular("Before_tanh", average_only=True)
-            logger.log_tabular("Qs", average_only=True)
-            logger.log_tabular("Q", average_only=True)
-            logger.log_tabular("All", average_only=True)
+            # logger.log_tabular("Before_tanh", average_only=True)
+            # logger.log_tabular("Qs", average_only=True)
+            for i in range(rew_dims):
+                logger.log_tabular(f"Q{i}", average_only=True)
+            logger.log_tabular("Q_comp", average_only=True)
+            # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
-
             logger.dump_tabular(epoch)
     return pi_network
 
