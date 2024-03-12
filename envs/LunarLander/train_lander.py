@@ -22,9 +22,9 @@ def lander_serializer(epochs, learning_rate):
     )
 
 
-class WithStrPolyDecay(tf.optimizers.schedules.PolynomialDecay):
-    def __str__(self):
-        return f"({self.initial_learning_rate},{self.end_learning_rate})"
+# class WithStrPolyDecay(tf.optimizers.schedules.PolynomialDecay):
+#     def __str__(self):
+#         return f"({self.initial_learning_rate},{self.end_learning_rate})"
 
 
 def train(cmd_args, hp, serializer):
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     total_steps = epochs * steps_per_epoch
     serializer = lander_serializer(
         epochs=epochs,
-        learning_rate=WithStrPolyDecay(1e-3, total_steps, end_learning_rate=1e-5),
+        learning_rate=1e-3 #WithStrPolyDecay(1e-3, total_steps, end_learning_rate=1e-5),
     )
     # cmd_args.learning_rate = 1e-3
     cmd_args = args_utils.parse_arguments(serializer)
