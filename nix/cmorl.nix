@@ -11,17 +11,19 @@ buildPythonPackage rec {
 
   propagatedBuildInputs = with pythonPackages; [
     numpy
-    # pygame
+    pygame
     pybullet
     matplotlib
-    wandb
+    (wandb.override {
+      protobuf = null;
+    })
     gymnasium
     tensorflow
     tqdm
     keras
     dm-tree
     rich
-    # (callPackage ./pybox2d.nix {})
+    pybox2d
     (callPackage ./mujoco-py.nix {})
   ];
 }

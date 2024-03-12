@@ -16,7 +16,7 @@
       forAllSystems = f: l.genAttrs supportedSystems
         (system: f system (import nixpkgs {
           inherit system;
-          overlays=[nixgl.overlay (import ./nix/pygame-overlay)];
+          overlays=[nixgl.overlay];
           config.allowUnfree=true;
           # config.cudaSupport = true;
           # config.cudaCapabilities = [ "8.6" ];
