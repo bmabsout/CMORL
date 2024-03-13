@@ -248,6 +248,7 @@ def ddpg(
             outputs = q_and_before_sigmoid(tf.concat([obs1, acts], axis=-1))
             q = outputs["q"]
             before_sigmoid = outputs["before_sigmoid"]
+
             before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid), axis=1)
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
@@ -336,8 +337,13 @@ def ddpg(
         use the learned policy (with some noise, via act_noise).
         """
         if t > hp.start_steps:
+
             a = get_action(o, hp.act_noise * (total_steps - t) / total_steps)
         else:
+            a = env.action_space.sample()
+        print(o)
+        print(a)
+        if np.isnan(a).any():
             a = env.action_space.sample()
 
         # Step the env
@@ -374,7 +380,7 @@ def ddpg(
                 # Q-learning update
                 loss_q = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=loss_q)
-
+                # print(loss_q)
                 # Policy update
                 (
                     all_c,

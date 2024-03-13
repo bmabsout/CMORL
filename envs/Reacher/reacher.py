@@ -15,7 +15,7 @@ from cmorl.utils.reward_utils import CMORL, RewardFnType
 def multi_dim_reward(state, action, env: "ReacherEnv"):
     vec = env.get_body_com("fingertip") - env.get_body_com("target")
     reward_performance = np.clip(1.0 - np.linalg.norm(vec) / 0.4, 0.0, 1.0) ** 2.0
-    reward_actuation = 1 - np.square(action).sum() / 2
+    reward_actuation = 1 - np.abs(action).sum() / 2
     rw_vec = np.array([reward_performance**2, reward_actuation**0.5], dtype=np.float32)
     return rw_vec
 

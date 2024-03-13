@@ -34,7 +34,7 @@ def multi_dim_reward(state, action, env: "PendulumEnv"):
     if isinstance(u, np.ndarray):
         actuation_rw = actuation_rw[0]
     # Merge the angle reward and the normalized torque into a single reward vector
-    rw_vec = np.array([angle_rw**0, actuation_rw], dtype=np.float32)
+    rw_vec = np.array([angle_rw, actuation_rw**0.5], dtype=np.float32)
     return rw_vec
 
 

@@ -59,7 +59,7 @@ def train(cmd_args, serializer):
     env_fn = lambda: reacher.ReacherEnv(
         goal_distance=cmd_args.distance,
         bias=cmd_args.bias,
-        reward_fn=reacher.composed_reward_fn,
+        reward_fn=reacher.multi_dim_reward,
     )
     ddpg(env_fn, **generated_params)
 
@@ -67,5 +67,5 @@ def train(cmd_args, serializer):
 if __name__ == "__main__":
     serializer = reacher_serializer()
     cmd_args = args_utils.parse_arguments(serializer)
-    cmd_args.epochs = 20
+    cmd_args.epochs = 50
     train(cmd_args, serializer)
