@@ -41,7 +41,7 @@ Actor-Critics
 """
 
 @keras.saving.register_keras_serializable(package="MyLayers")
-class RescalingFixed(keras.layers.Rescaling):
+class RescalingFixed(Rescaling):
     def __init__(self, scale, offset=0.0, **kwargs):
         if type(scale) is dict:
             scale = np.array(scale['config']['value'])
@@ -52,7 +52,7 @@ class RescalingFixed(keras.layers.Rescaling):
 
 
 def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer):
-    inputs = keras.Input((obs_space.shape[0],))
+    inputs = Input((obs_space.shape[0],))
     normalized_input = RescalingFixed(1./obs_normalizer)(inputs)
     # unscaled = unscale_by_space(inputs, obs_space)
     linear_output = mlp_functional(
@@ -79,7 +79,7 @@ def critic(
     rwds_dim=1,
 ):
     concated_normalizer = np.concatenate([obs_normalizer, np.ones(act_space.shape[0])])
-    inputs = keras.Input((obs_space.shape[0] + act_space.shape[0],))
+    inputs = Input((obs_space.shape[0] + act_space.shape[0],))
     normalized_input = RescalingFixed(1. / concated_normalizer)(inputs)
     outputs = mlp_functional(
         normalized_input, hidden_sizes + (rwds_dim,), output_activation=None

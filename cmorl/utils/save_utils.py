@@ -2,12 +2,12 @@ import argparse
 import json
 import os
 import time
-from keras import models, Model
+from keras import models, Model, config
 import pickle
-from cmorl.utils.args_utils import Arg_Serializer, Serialized_Argument
+from cmorl.utils.args_utils import Arg_Serializer
 from pathlib import Path
 from cmorl.utils.serialization_utils import ExtraTypesEncoder
-from functools import partial
+config.enable_unsafe_deserialization()
 
 
 def save_hypers(experiment_name, hypers, cmd_args, serializer:Arg_Serializer):
