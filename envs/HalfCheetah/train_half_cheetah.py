@@ -8,7 +8,7 @@ def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=2, learning_rate=1e-4)
+    serializer = args_utils.default_serializer(epochs=50, learning_rate=1e-4)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams(
         epochs=cmd_args.epochs,
@@ -18,7 +18,7 @@ def parse_args_and_train(args=None):
         max_ep_len=200,
     )
     generated_params = train_utils.create_train_folder_and_params(
-        "Pendulum-custom", hp, cmd_args, serializer
+        "Half-Cheetah-custom", hp, cmd_args, serializer
     )
     env_fn = lambda: HalfCheetahEnv(
         reward_fn=half_cheetah.multi_dim_reward,

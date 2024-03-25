@@ -14,12 +14,12 @@ from cmorl.utils.reward_utils import CMORL, RewardFnType
 
 
 def multi_dim_reward(state, action, env: "HalfCheetahEnv"):
-    forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity) / 5
-    forward_reward = np.clip(forward_reward * 2, -1, 1)
+    forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
+    # scale to 0 and 1
     forward_reward = (forward_reward + 1) / 2
 
     ctrl_reward = 1 - env.control_cost(action) / 6
-    ctrl_reward = np.clip(ctrl_reward * 2, 0, 1)
+
     rw_vec = np.array([forward_reward, ctrl_reward], dtype=np.float32)
     return rw_vec
 
@@ -237,8 +237,11 @@ class HalfCheetahEnv(MujocoEnv, utils.EzPickle):
             + self.data.qvel.size
             - exclude_current_positions_from_observation
         )
+        # self.observation_space = Box(
+        #     low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64
+        # )
         self.observation_space = Box(
-            low=-np.inf, high=np.inf, shape=(obs_size,), dtype=np.float64
+            -np.finfo(np.float32).max, np.finfo(np.float32).max, (obs_size,), np.float32
         )
         self.action_space = Box(-1, 1, (6,), np.float32)
 
@@ -294,9 +297,9 @@ class HalfCheetahEnv(MujocoEnv, utils.EzPickle):
             "reward_ctrl": -ctrl_cost,
         }
 
-        # Write the info in a .txt file
-        with open("info.txt", "a") as file:
-            file.write(f"{reward_info}\n")
+        # # Write the info in a .txt file
+        # with open("info.txt", "a") as file:
+        #     file.write(f"{reward_info}\n")
 
         reward = self.cmorl(None, action, self)
         return reward, reward_info

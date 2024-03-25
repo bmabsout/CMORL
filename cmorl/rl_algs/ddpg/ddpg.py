@@ -17,6 +17,10 @@ import keras
 # adapted from https://github.com/tanzhenyu/spinup-tf2/blob/master/spinup/algos/ddpg/ddpg.py
 
 
+# This script needs these libraries to be installed:
+#   tensorflow, numpy
+
+
 class ReplayBuffer:
     """
     A simple FIFO experience replay buffer for DDPG agents.
@@ -341,8 +345,7 @@ def ddpg(
             a = get_action(o, hp.act_noise * (total_steps - t) / total_steps)
         else:
             a = env.action_space.sample()
-        print(o)
-        print(a)
+
         if np.isnan(a).any():
             a = env.action_space.sample()
 
@@ -442,6 +445,7 @@ def ddpg(
             # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
+
     return pi_network
 
 

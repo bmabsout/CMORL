@@ -2,6 +2,7 @@ from pathlib import Path
 from cmorl.utils import save_utils
 import numpy as np
 
+
 def test(actor, env, seed=123, render=True, num_steps=100):
     o, i = env.reset(seed=seed)
     high = env.action_space.high
