@@ -15,7 +15,7 @@ buildPythonPackage rec {
     pygame
     pybullet
     matplotlib
-    wandb
+    (callPackage ./wandb.nix {})
     gymnasium
     tensorflow-bin
     tqdm

@@ -39,15 +39,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1710868679,
-        "narHash": "sha256-V1o2bCZdeYKP/0zgVp4EN0KUjMItAMk6J7SvCXUI5IU=",
-        "owner": "guibou",
+        "lastModified": 1710943022,
+        "narHash": "sha256-+K0UtpWhsA5X0kZpN2eaBI6TP2OvrQAWFvtoeICWmhM=",
+        "owner": "kenranunderscore",
         "repo": "nixGL",
-        "rev": "d709a8abcde5b01db76ca794280745a43c8662be",
+        "rev": "03099db76982ef2bbaf9e7ca0488fff83fc8b5a8",
         "type": "github"
       },
       "original": {
-        "owner": "guibou",
+        "owner": "kenranunderscore",
+        "ref": "handle-unset-buildInputs",
         "repo": "nixGL",
         "type": "github"
       }
