@@ -30,7 +30,7 @@
             python = pkgs.python3.withPackages (p: cmorl.propagatedBuildInputs);
         in pkgs.mkShell {
             buildInputs = [
-                pkgs.nixgl.auto.nixGLDefault
+                # pkgs.nixgl.auto.nixGLDefault
                 pkgs.nixgl.nixGLIntel
                 python
             ];

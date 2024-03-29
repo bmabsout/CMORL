@@ -3,7 +3,7 @@ from cmorl.utils import save_utils
 import numpy as np
 
 
-def test(actor, env, seed=123, render=True, num_steps=100):
+def test(actor, env, seed=123, render=True, num_steps=400):
     o, i = env.reset(seed=seed)
     high = env.action_space.high
     low = env.action_space.low
@@ -30,7 +30,7 @@ def test(actor, env, seed=123, render=True, num_steps=100):
     return np.array(os), np.array(rs)
 
 
-def folder_to_results(env, render, num_tests, folder_path, steps=100, **kwargs):
+def folder_to_results(env, render, num_tests, folder_path, steps=400, **kwargs):
     saved = save_utils.load_actor(folder_path)
 
     def actor(x):
