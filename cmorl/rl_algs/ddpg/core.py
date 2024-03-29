@@ -1,10 +1,8 @@
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras import Model
-from tensorflow.keras.layers import Dense, Input, Lambda, Activation
-import gymnasium as gym
+from keras import Model
+from keras.layers import Dense, Input, Rescaling, Activation
 from gymnasium import spaces
-
+import keras
 
 def mlp_functional(
     inputs,
@@ -42,9 +40,20 @@ def unscale_by_space(unscale_me, space):  # outputs [-0.5, 0.5]
 Actor-Critics
 """
 
+@keras.saving.register_keras_serializable(package="MyLayers")
+class RescalingFixed(Rescaling):
+    def __init__(self, scale, offset=0.0, **kwargs):
+        if type(scale) is dict:
+            scale = np.array(scale['config']['value'])
+        if type(scale) is dict:
+            scale = np.array(scale['config']['value'])
+        super().__init__(scale, offset, **kwargs)
+
+
+
 def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer):
-    inputs = tf.keras.Input((obs_space.shape[0],))
-    normalized_input = Lambda(lambda t: t / obs_normalizer)(inputs)
+    inputs = Input((obs_space.shape[0],))
+    normalized_input = RescalingFixed(1./obs_normalizer)(inputs)
     # unscaled = unscale_by_space(inputs, obs_space)
     linear_output = mlp_functional(
         normalized_input,
@@ -57,7 +66,7 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
     # clipped = Lambda(lambda t: tf.clip_by_value(
     #     t, -1.0, 1.0))(normed)
     # scaled = scale_by_space(normed, act_space)
-    model = tf.keras.Model(inputs, tanhed)
+    model = keras.Model(inputs, tanhed)
     model.compile()
     return model
 
@@ -70,17 +79,17 @@ def critic(
     rwds_dim=1,
 ):
     concated_normalizer = np.concatenate([obs_normalizer, np.ones(act_space.shape[0])])
-    inputs = tf.keras.Input((obs_space.shape[0] + act_space.shape[0],))
-    normalized_input = Lambda(lambda t: t / concated_normalizer)(inputs)
+    inputs = Input((obs_space.shape[0] + act_space.shape[0],))
+    normalized_input = RescalingFixed(1. / concated_normalizer)(inputs)
     outputs = mlp_functional(
         normalized_input, hidden_sizes + (rwds_dim,), output_activation=None
     )
 
     # name the layer before sigmoid
-    before_sigmoid = Lambda(lambda t: t * 0.1 - 0.5, name="before_sigmoid")(outputs)
+    before_sigmoid = RescalingFixed(0.1, offset=-0.5, name="before_sigmoid")(outputs)
 
     biased_normed = Activation("sigmoid")(before_sigmoid)
-    model = tf.keras.Model(inputs, biased_normed)
+    model = keras.Model(inputs, biased_normed)
     model.compile()
     return model
 

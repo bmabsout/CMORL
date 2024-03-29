@@ -1,11 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # mach-nix.url = "github:DavHau/mach-nix/master";
-    # mach-nix.inputs.nixpkgs.follows = "nixpkgs";
-    # mach-nix.inputs.pypi-deps-db.follows = "pypi-deps-db";
-    # pypi-deps-db.url = "github:DavHau/pypi-deps-db";
-    nixgl.url = "github:guibou/nixGL";
+    nixgl.url = "github:kenranunderscore/nixGL/handle-unset-buildInputs";
     nixgl.inputs.nixpkgs.follows = "nixpkgs";
     flake-compat = {
       url = "github:edolstra/flake-compat";
@@ -34,7 +30,8 @@
             python = pkgs.python3.withPackages (p: cmorl.propagatedBuildInputs);
         in pkgs.mkShell {
             buildInputs = [
-                pkgs.nixgl.auto.nixGLDefault
+                # pkgs.nixgl.auto.nixGLDefault
+                pkgs.nixgl.nixGLIntel
                 python
             ];
             shellHook = ''
