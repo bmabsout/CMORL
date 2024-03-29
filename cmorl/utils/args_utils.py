@@ -5,12 +5,14 @@ from functools import reduce
 import argparse
 import time
 
+
 class Serialized_Argument:
     def __init__(self, name: str, **kwargs):
         self.name = name
         self.kwargs = kwargs
 
-def ignore_some_keys(hypers: dict[str, Any], keys = []):
+
+def ignore_some_keys(hypers: dict[str, Any], keys=[]):
     copied_hypers = copy.deepcopy(hypers)
     for ignore_me in keys:
         try:
@@ -21,7 +23,9 @@ def ignore_some_keys(hypers: dict[str, Any], keys = []):
 
 
 class Arg_Serializer:
-    def __init__(self, abbrev_to_args: dict[str, Serialized_Argument], ignored: set[str] = set()) -> None:
+    def __init__(
+        self, abbrev_to_args: dict[str, Serialized_Argument], ignored: set[str] = set()
+    ) -> None:
         self.abbrev_to_args = abbrev_to_args
         self.ignored = ignored
         self.name_to_abbrev = {
@@ -30,8 +34,7 @@ class Arg_Serializer:
 
     def add_serialized_args_to_parser(self, parser):
         for abbreviation, ser_arg in self.abbrev_to_args.items():
-            parser.add_argument("-"+abbreviation, ser_arg.name, **ser_arg.kwargs)
-
+            parser.add_argument("-" + abbreviation, ser_arg.name, **ser_arg.kwargs)
 
     @staticmethod
     def join(*serializers: Optional["Arg_Serializer"]):
@@ -40,10 +43,13 @@ class Arg_Serializer:
             overlapping_abbrevs = as1.abbrev_to_args.keys() & as2.abbrev_to_args.keys()
             if overlapping_names or overlapping_abbrevs:
                 raise Exception(
-                    f"Cannot join two Arg_Serializers with overlapping names {overlapping_names} or abbreviations {overlapping_abbrevs}")
-            return Arg_Serializer({**as1.abbrev_to_args, **as2.abbrev_to_args}, as1.ignored | as2.ignored)
+                    f"Cannot join two Arg_Serializers with overlapping names {overlapping_names} or abbreviations {overlapping_abbrevs}"
+                )
+            return Arg_Serializer(
+                {**as1.abbrev_to_args, **as2.abbrev_to_args}, as1.ignored | as2.ignored
+            )
 
-        return reduce(join_two, [ s for s in serializers if s is not None])
+        return reduce(join_two, [s for s in serializers if s is not None])
 
     def get_minified_args_dict(self, hypers: dict[str, Any]):
         extra_args = {}
@@ -70,29 +76,43 @@ class Arg_Serializer:
 def rl_alg_serializer(epochs=50, learning_rate=3e-3):
     return Arg_Serializer(
         abbrev_to_args={
-            'e': Serialized_Argument(name='--epochs', type=int, default=epochs, help='number of epochs'),
-            's': Serialized_Argument(name='--seed', type=int, default=int(time.time() * 1e5) % int(1e6)),
-            'l': Serialized_Argument(name='--learning_rate', type=float, default=learning_rate),
-            'p': Serialized_Argument(name='--prev_folder', type=str, help='folder location for a previous training run with initialized critics and actors'),
-            'r': Serialized_Argument(name='--replay_save', action='store_true', help='whether to save the replay buffer')
+            "e": Serialized_Argument(
+                name="--epochs", type=int, default=epochs, help="number of epochs"
+            ),
+            "s": Serialized_Argument(
+                name="--seed", type=int, default=int(time.time() * 1e5) % int(1e6)
+            ),
+            "l": Serialized_Argument(
+                name="--learning_rate", type=float, default=learning_rate
+            ),
+            "p": Serialized_Argument(
+                name="--prev_folder",
+                type=str,
+                help="folder location for a previous training run with initialized critics and actors",
+            ),
+            "r": Serialized_Argument(
+                name="--replay_save",
+                action="store_true",
+                help="whether to save the replay buffer",
+            ),
         },
-        ignored={'save_path', 'seed', 'replay_save'}
+        ignored={"save_path", "seed", "replay_save"},
     )
 
+
 def objective_composition_serializer():
-    return Arg_Serializer(
-        abbrev_to_args={
-        },
-        ignored=set()
-    )
+    return Arg_Serializer(abbrev_to_args={}, ignored=set())
 
 
 def default_serializer(epochs=50, learning_rate=3e-3):
     return Arg_Serializer.join(
         # ArgsSerializer({'n': Serialized_Argument(name='--experiment_name', type=str, required=True)}, ignored={'experiment_name'}),
-        rl_alg_serializer(epochs, learning_rate), objective_composition_serializer())
+        rl_alg_serializer(epochs, learning_rate),
+        objective_composition_serializer(),
+    )
 
-def parse_arguments(serializer:Arg_Serializer, args=None, parser = None):
+
+def parse_arguments(serializer: Arg_Serializer, args=None, parser=None):
     if parser is None:
         parser = argparse.ArgumentParser()
     serializer.add_serialized_args_to_parser(parser)

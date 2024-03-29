@@ -34,21 +34,21 @@ def multi_dim_reward(state, action, env: "PendulumEnv"):
     if isinstance(u, np.ndarray):
         actuation_rw = actuation_rw[0]
     # Merge the angle reward and the normalized torque into a single reward vector
-    rw_vec = np.array([angle_rw, actuation_rw], dtype=np.float32)
+    rw_vec = np.array([angle_rw, actuation_rw**0.5], dtype=np.float32)
     return rw_vec
 
 
 def composed_reward_fn(state, action, env: "PendulumEnv"):
     rw_vec = multi_dim_reward(state, action, env)
-    p_mean(rw_vec, p=0.001)
-    return
+    reward = p_mean(rw_vec, p=-0.0)
+    return reward
 
 
 @tf.function
 def q_composer(q_values):
-    q1_c = q_values[0]
-    q2_c = q_values[1]
-    q_values = tf.stack([q1_c, q2_c], axis=0)
+    # q1_c = q_values[0]
+    # q2_c = q_values[1]
+    # q_values = tf.stack([q1_c, q2_c], axis=0)
     qs_c = tf.reduce_mean(q_values, axis=0)
     q_c = p_mean(qs_c, p=-4.0)
     return qs_c, q_c

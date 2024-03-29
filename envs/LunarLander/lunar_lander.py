@@ -81,46 +81,22 @@ def multi_dim_reward(state: spaces.Box, action: spaces.Box, env: "LunarLander"):
     first_leg = 0.1 + 0.9 * state[6]  # type: ignore
     second_leg = 0.1 + 0.9 * state[7]  # type: ignore
 
-    return np.array([dist_x**2.0, dist_y**2.0, first_leg, second_leg])
+    return np.array([dist_x**2, dist_y**2, first_leg**0.5, second_leg**0.5])
 
 
 def composed_reward_fn(state: spaces.Box, action: spaces.Box, env: "LunarLander"):
-    return p_mean(multi_dim_reward(state, action, env), p=0.0)
-
-
-def multi_dim_reward_sparse(state: spaces.Box, action: spaces.Box, env: "LunarLander"):
-    dist_x = np.clip(
-        (1.0 - 3 * np.abs(state[0]) / env.observation_space.high[0]), 0.0, 1.0  # type: ignore
-    )
-    dist_x = 1.0 if dist_x > 0.8 else 0.0
-    angle = np.clip((1 - normed_angular_distance(state[4], 0.0)), 0.0, 1.0)
-    angle = 1.0 if angle > 0.8 else 0.0
-    angular_velocity = np.clip(
-        1.0 - np.abs(state[5]) / np.abs(env.observation_space.high[5]), 0.0, 1.0
-    )
-    # angular_velocity = 1.0 if angular_velocity > 0.8 else 0.0
-    dist_y = np.clip((1.0 - np.abs(state[1]) / env.observation_space.high[1]), 0.0, 1.0)  # type: ignore
-    # dist_y = 1.0 if dist_y > 0.8 else 0.0
-    first_leg = 1.0 * state[6]  # type: ignore
-    second_leg = 1.0 * state[7]  # type: ignore
-    return np.array([dist_x, dist_y, first_leg, second_leg])
-
-
-def composed_reward_fn_sparse(
-    state: spaces.Box, action: spaces.Box, env: "LunarLander"
-):
-    return p_mean(multi_dim_reward_sparse(state, action, env), p=0.0)
+    rew_vec = multi_dim_reward(state, action, env)
+    reward = p_mean(rew_vec, p=-4.0)
+    return reward
 
 
 @tf.function
 def q_composer(q_values: tf.Tensor):
-    q1_c = q_values[0]
-    q2_c = q_values[1]
-    q3_c = q_values[2]
-    q4_c = q_values[3]
-    q5_c = q_values[4]
-    q6_c = q_values[5]
-    q_values = tf.stack([q1_c, q2_c, q3_c, q4_c, q5_c, q6_c], axis=0)
+    # q1_c = q_values[0]
+    # q2_c = q_values[1]
+    # q3_c = q_values[2]
+    # q4_c = q_values[3]
+    # q_values = tf.stack([q1_c, q2_c, q3_c, q4_c], axis=0)
     qs_c = tf.reduce_mean(q_values, axis=0)
     q_c = p_mean(qs_c, p=-4.0)
     return qs_c, q_c

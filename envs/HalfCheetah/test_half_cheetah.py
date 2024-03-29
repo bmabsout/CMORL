@@ -1,6 +1,6 @@
 import argparse
 import numpy as np
-from envs.Reacher import reacher
+from envs.HalfCheetah import half_cheetah
 from cmorl.utils import test_utils
 
 
@@ -37,9 +37,7 @@ if __name__ == "__main__":
     # import matplotlib.pyplot as plt
     cmd_args = parse_args()
     runs = test_utils.run_tests(
-        reacher.ReacherEnv(
-            goal_distance=cmd_args.distance,
-            bias=cmd_args.bias,
+        half_cheetah.HalfCheetahEnv(
             render_mode="human" if cmd_args.render else None,
         ),
         cmd_args,

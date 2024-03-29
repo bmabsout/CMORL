@@ -1,8 +1,7 @@
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, Dict, NamedTuple
+from typing import Any, Callable, Dict
 import numpy as np
 import tensorflow as tf
-import pickle
 import gymnasium as gym
 import time
 from cmorl.rl_algs.ddpg import core
@@ -13,11 +12,13 @@ from cmorl.utils.loss_composition import (
     move_toward_zero,
     sigmoid_regularizer,
 )
-from cmorl.utils import args_utils
-from cmorl.utils import save_utils
-from functools import partial
+import keras
 
 # adapted from https://github.com/tanzhenyu/spinup-tf2/blob/master/spinup/algos/ddpg/ddpg.py
+
+
+# This script needs these libraries to be installed:
+#   tensorflow, numpy
 
 
 class ReplayBuffer:
@@ -200,14 +201,14 @@ def ddpg(
         print(pi_network.output)
         print(pi_network.layers[-2].output)
         print(pi_network.input)
-        pi_and_before_tanh = tf.keras.Model(
+        pi_and_before_tanh = keras.Model(
             pi_network.input,
             {"pi": pi_network.output, "before_tanh": pi_network.layers[-2].output},
         )
         pi_and_before_tanh.compile()
-        # q_and_before_sigmoid = tf.keras.Model(
+        # q_and_before_sigmoid = keras.Model(
         #     q_network.input, {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output})
-        q_and_before_sigmoid = tf.keras.Model(
+        q_and_before_sigmoid = keras.Model(
             q_network.input,
             {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output},
         )
@@ -229,8 +230,8 @@ def ddpg(
         obs_dim=obs_dim, act_dim=act_dim, size=hp.replay_size, rwds_dim=rew_dims
     )
     # Separate train ops for pi, q
-    pi_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.pi_lr)
-    q_optimizer = tf.keras.optimizers.Adam(learning_rate=hp.q_lr)
+    pi_optimizer = keras.optimizers.Adam(learning_rate=hp.pi_lr)
+    q_optimizer = keras.optimizers.Adam(learning_rate=hp.q_lr)
 
     # Polyak averaging for target variables
     @tf.function
@@ -251,6 +252,7 @@ def ddpg(
             outputs = q_and_before_sigmoid(tf.concat([obs1, acts], axis=-1))
             q = outputs["q"]
             before_sigmoid = outputs["before_sigmoid"]
+
             before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid), axis=1)
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
@@ -285,7 +287,6 @@ def ddpg(
             #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
             qs_c, q_c = env.cmorl.q_composer(q_values)
-
             all_c = p_mean(
                 tf.stack(
                     [
@@ -295,6 +296,7 @@ def ddpg(
                 ),
                 p=0.0,
             )
+            # print(qs_c.shape, q_c.shape, all_c.shape)
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if debug:
@@ -339,8 +341,12 @@ def ddpg(
         use the learned policy (with some noise, via act_noise).
         """
         if t > hp.start_steps:
+
             a = get_action(o, hp.act_noise * (total_steps - t) / total_steps)
         else:
+            a = env.action_space.sample()
+
+        if np.isnan(a).any():
             a = env.action_space.sample()
 
         # Step the env
@@ -377,7 +383,7 @@ def ddpg(
                 # Q-learning update
                 loss_q = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=loss_q)
-
+                # print(loss_q)
                 # Policy update
                 (
                     all_c,
@@ -386,19 +392,27 @@ def ddpg(
                     before_tanh_c,
                 ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
 
+                qs_c = qs_c.numpy()
                 logger.store(
-                    All=all_c,
-                    Qs=qs_c,
-                    Q=q_c,
+                    # All=all_c,
+                    Q_comp=q_c,
                     Before_tanh=before_tanh_c,
                 )
+                qs_dict_ = {}
+                for i, q in enumerate(qs_c):
+                    qs_dict_[f"Q{i}"] = q
+                logger.store(**qs_dict_)
 
                 # target update
                 target_update()
 
         if d or (ep_len == hp.max_ep_len):
-            print(ep_ret)
-            logger.store(EpRet=ep_ret, EpLen=ep_len)
+            # print(ep_ret)
+            ret_dict_ = {}
+            for i in range(rew_dims):
+                ret_dict_[f"EpRet_{i}"] = ep_ret[i]
+            logger.store(**ret_dict_)
+            logger.store(EpLen=ep_len)
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -415,18 +429,23 @@ def ddpg(
             # test_agent()
 
             # Log info about epoch
-            logger.log_tabular("Epoch", epoch)
-            logger.log_tabular("EpRet", average_only=True)
+            # logger.log_tabular("Epoch", epoch)
+            logger.log_tabular("Episode", epoch)
+            # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
+            for i in range(rew_dims):
+                logger.log_tabular(f"EpRet_{i}", average_only=True)
             logger.log_tabular("Time", time.time() - start_time)
             logger.log_tabular("TotalEnvInteracts", t)
-            logger.log_tabular("Before_tanh", average_only=True)
-            logger.log_tabular("Qs", average_only=True)
-            logger.log_tabular("Q", average_only=True)
-            logger.log_tabular("All", average_only=True)
+            # logger.log_tabular("Before_tanh", average_only=True)
+            # logger.log_tabular("Qs", average_only=True)
+            for i in range(rew_dims):
+                logger.log_tabular(f"Q{i}", average_only=True)
+            logger.log_tabular("Q_comp", average_only=True)
+            # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
-
             logger.dump_tabular(epoch)
+
     return pi_network
 
 
