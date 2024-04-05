@@ -14,6 +14,8 @@ from cmorl.utils.loss_composition import (
 )
 import keras
 
+import wandb
+
 # adapted from https://github.com/tanzhenyu/spinup-tf2/blob/master/spinup/algos/ddpg/ddpg.py
 
 
@@ -173,6 +175,14 @@ def ddpg(
             the current policy and value function.
 
     """
+    # start a new wandb run to track this script
+    weigths_and_biases = wandb.init(
+        # set the wandb project where this run will be logged
+        project="Ant",
+        # track hyperparameters and run metadata
+        config=hp.__dict__,
+    )
+
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
 
@@ -253,7 +263,7 @@ def ddpg(
             q = outputs["q"]
             before_sigmoid = outputs["before_sigmoid"]
 
-            before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid), axis=1)
+            before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid))
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
             # q_pi_targ_squeezed = tf.squeeze(q_pi_targ, axis=1)
@@ -291,7 +301,7 @@ def ddpg(
                 tf.stack(
                     [
                         scale_gradient(tf.squeeze(q_c), 3e2),
-                        # scale_gradient(tf.squeeze(before_tanh_c), 0.1),
+                        scale_gradient(tf.squeeze(before_tanh_c), 0.1),
                     ]
                 ),
                 p=0.0,
@@ -383,6 +393,7 @@ def ddpg(
                 # Q-learning update
                 loss_q = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=loss_q)
+                weigths_and_biases.log({"Q-Loss": loss_q})
                 # print(loss_q)
                 # Policy update
                 (
@@ -398,10 +409,14 @@ def ddpg(
                     Q_comp=q_c,
                     Before_tanh=before_tanh_c,
                 )
+                weigths_and_biases.log(
+                    {"Q-composed": q_c, "Before_tanh": before_tanh_c}
+                )
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
                     qs_dict_[f"Q{i}"] = q
                 logger.store(**qs_dict_)
+                weigths_and_biases.log(qs_dict_)
 
                 # target update
                 target_update()
@@ -412,7 +427,9 @@ def ddpg(
             for i in range(rew_dims):
                 ret_dict_[f"EpRet_{i}"] = ep_ret[i]
             logger.store(**ret_dict_)
+            weigths_and_biases.log(ret_dict_)
             logger.store(EpLen=ep_len)
+            weigths_and_biases.log({"EpLen": ep_len})
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -431,6 +448,7 @@ def ddpg(
             # Log info about epoch
             # logger.log_tabular("Epoch", epoch)
             logger.log_tabular("Episode", epoch)
+            weigths_and_biases.log({"Episode": epoch})
             # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             for i in range(rew_dims):
@@ -445,6 +463,9 @@ def ddpg(
             # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
+
+    # [optional] finish the wandb run, necessary in notebooks
+    weigths_and_biases.finish()
 
     return pi_network
 

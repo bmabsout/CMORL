@@ -1,6 +1,7 @@
 experiments/
 trained/
 logs/
+wandb/
 MUJOCO_LOG.TXT
 *.p
 *.pb

@@ -26,6 +26,7 @@ def multi_dim_reward(state, action, env: "AntEnv"):
 def composed_reward_fn(state, action, env):
     rew_vec = multi_dim_reward(state, action, env)
     reward = p_mean(rew_vec, p=-4.0)
+
     return reward
 
 
