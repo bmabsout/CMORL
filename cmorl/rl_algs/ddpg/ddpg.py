@@ -13,11 +13,8 @@ from cmorl.utils.loss_composition import (
     sigmoid_regularizer,
 )
 import keras
-<<<<<<< HEAD
 
 import wandb
-=======
->>>>>>> 237ffc852670ee17ec10522918a83d62a7cf68b2
 
 # adapted from https://github.com/tanzhenyu/spinup-tf2/blob/master/spinup/algos/ddpg/ddpg.py
 
@@ -396,10 +393,7 @@ def ddpg(
                 # Q-learning update
                 loss_q = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=loss_q)
-<<<<<<< HEAD
                 weigths_and_biases.log({"Q-Loss": loss_q})
-=======
->>>>>>> 237ffc852670ee17ec10522918a83d62a7cf68b2
                 # print(loss_q)
                 # Policy update
                 (
@@ -415,20 +409,14 @@ def ddpg(
                     Q_comp=q_c,
                     Before_tanh=before_tanh_c,
                 )
-<<<<<<< HEAD
                 weigths_and_biases.log(
                     {"Q-composed": q_c, "Before_tanh": before_tanh_c}
                 )
-=======
->>>>>>> 237ffc852670ee17ec10522918a83d62a7cf68b2
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
                     qs_dict_[f"Q{i}"] = q
                 logger.store(**qs_dict_)
-<<<<<<< HEAD
                 weigths_and_biases.log(qs_dict_)
-=======
->>>>>>> 237ffc852670ee17ec10522918a83d62a7cf68b2
 
                 # target update
                 target_update()
@@ -439,13 +427,9 @@ def ddpg(
             for i in range(rew_dims):
                 ret_dict_[f"EpRet_{i}"] = ep_ret[i]
             logger.store(**ret_dict_)
-<<<<<<< HEAD
             weigths_and_biases.log(ret_dict_)
             logger.store(EpLen=ep_len)
             weigths_and_biases.log({"EpLen": ep_len})
-=======
-            logger.store(EpLen=ep_len)
->>>>>>> 237ffc852670ee17ec10522918a83d62a7cf68b2
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -464,10 +448,7 @@ def ddpg(
             # Log info about epoch
             # logger.log_tabular("Epoch", epoch)
             logger.log_tabular("Episode", epoch)
-<<<<<<< HEAD
             weigths_and_biases.log({"Episode": epoch})
-=======
->>>>>>> 237ffc852670ee17ec10522918a83d62a7cf68b2
             # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             for i in range(rew_dims):
@@ -483,12 +464,9 @@ def ddpg(
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
 
-<<<<<<< HEAD
     # [optional] finish the wandb run, necessary in notebooks
     weigths_and_biases.finish()
 
-=======
->>>>>>> 237ffc852670ee17ec10522918a83d62a7cf68b2
     return pi_network
 
 
