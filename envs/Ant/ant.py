@@ -45,8 +45,12 @@ def multi_dim_reward_joints(state, action, env: "AntEnv"):
 
 
 def multi_dim_reward(state, action, env: "AntEnv"):
-    forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
-    forward_reward = (forward_reward + 1) / 2
+    # forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
+    abs_x_velocity = np.abs(env.x_velocity)
+    forward_reward = (abs_x_velocity * env._forward_reward_weight) / (
+        abs_x_velocity * env._forward_reward_weight + 1
+    )
+    # forward_reward = (forward_reward + 1) / 2
 
     ctrl_reward = 1 - env.control_cost(action) / 8
 
@@ -56,7 +60,10 @@ def multi_dim_reward(state, action, env: "AntEnv"):
 
 def composed_reward_fn(state, action, env):
     rew_vec = multi_dim_reward(state, action, env)
-    reward = p_mean(rew_vec, p=-4.0)
+    # combine the rewards from indecies 1 to 8
+    cost_reward = p_mean(rew_vec[1:], p=0.0)
+    vel_reward = rew_vec[0]
+    reward = p_mean(np.array([vel_reward, cost_reward]), p=-4.0)
     return reward
 
 
