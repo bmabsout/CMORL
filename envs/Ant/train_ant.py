@@ -22,7 +22,7 @@ def parse_args_and_train(args=None):
         "Ant-Custom", hp, cmd_args, serializer
     )
     env_fn = lambda: AntEnv(
-        reward_fn=ant.multi_dim_reward,
+        reward_fn=ant.multi_dim_reward_joints,
         # render_mode="human",
     )
     ddpg(env_fn, **generated_params)

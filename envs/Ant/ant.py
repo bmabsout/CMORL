@@ -13,9 +13,44 @@ from cmorl.utils.loss_composition import p_mean
 from cmorl.utils.reward_utils import CMORL, RewardFnType
 
 
-def multi_dim_reward(state, action, env: "AntEnv"):
+def multi_dim_reward_joints(state, action, env: "AntEnv"):
     forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
     forward_reward = (forward_reward + 1) / 2
+
+    # Create a reward for every action joint in the action array
+    ctrl_reward_1 = 1 - env.control_cost(action[0])
+    ctrl_reward_2 = 1 - env.control_cost(action[1])
+    ctrl_reward_3 = 1 - env.control_cost(action[2])
+    ctrl_reward_4 = 1 - env.control_cost(action[3])
+    ctrl_reward_5 = 1 - env.control_cost(action[4])
+    ctrl_reward_6 = 1 - env.control_cost(action[5])
+    ctrl_reward_7 = 1 - env.control_cost(action[6])
+    ctrl_reward_8 = 1 - env.control_cost(action[7])
+
+    rw_vec = np.array(
+        [
+            forward_reward,
+            ctrl_reward_1,
+            ctrl_reward_2,
+            ctrl_reward_3,
+            ctrl_reward_4,
+            ctrl_reward_5,
+            ctrl_reward_6,
+            ctrl_reward_7,
+            ctrl_reward_8,
+        ],
+        dtype=np.float32,
+    )
+    return rw_vec
+
+
+def multi_dim_reward(state, action, env: "AntEnv"):
+    # forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
+    abs_x_velocity = np.abs(env.x_velocity)
+    forward_reward = (abs_x_velocity * env._forward_reward_weight) / (
+        abs_x_velocity * env._forward_reward_weight + 1
+    )
+    # forward_reward = (forward_reward + 1) / 2
 
     ctrl_reward = 1 - env.control_cost(action) / 8
 
@@ -25,7 +60,10 @@ def multi_dim_reward(state, action, env: "AntEnv"):
 
 def composed_reward_fn(state, action, env):
     rew_vec = multi_dim_reward(state, action, env)
-    reward = p_mean(rew_vec, p=-4.0)
+    # combine the rewards from indecies 1 to 8
+    cost_reward = p_mean(rew_vec[1:], p=0.0)
+    vel_reward = rew_vec[0]
+    reward = p_mean(np.array([vel_reward, cost_reward]), p=-4.0)
     return reward
 
 
@@ -408,6 +446,10 @@ class AntEnv(MujocoEnv, utils.EzPickle):
         if self.render_mode == "human":
             self.render()
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
+
+        # Save the velocity in the x in a .txt file
+        with open("velocity.txt", "a") as f:
+            f.write(str(x_velocity) + "\n")
         return observation, reward, terminated, False, info
 
     def _get_rew(self, x_velocity: float, action):
