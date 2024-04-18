@@ -272,18 +272,40 @@ def ddpg(
             # TODO: tf.tile -> search about it
             # dones = tf.tile(tf.expand_dims(dones, axis=-1), [1, rew_dims])
             batch_size = tf.shape(dones)[0]
+
+            # calculate q_loss for every single reward by looping through them
+            dones_i = dones
+            dones_i = tf.broadcast_to(tf.expand_dims(dones_i, -1), (batch_size, 1))
+
+            # split rews and q_pi_targ along the last axis
+            rews_i = rews
+            rews_i = tf.split(rews_i, rew_dims, axis=-1)
+            q_pi_targ_i = q_pi_targ
+            q_pi_targ_i = tf.split(q_pi_targ_i, rew_dims, axis=-1)
+
+            # create a dict to store the loss for each reward
+            q_loss_dic = {}
+            for i in range(rew_dims):
+                backup_i = tf.stop_gradient(
+                    rews_i[i] / max_q_val[i] + (1 - dones_i) * hp.gamma * q_pi_targ_i[i]
+                )
+                q_loss_i = tf.reduce_mean((q[:, i] - backup_i) ** 2)
+                q_loss_dic[f"Q-loss_{i}"] = q_loss_i
+
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
 
             backup = tf.stop_gradient(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
-            # q_loss = tf.reduce_mean((q - backup) ** 2, 0)  # -before_tanh_c*1e-5
-            q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
+            q_loss = tf.reduce_mean((q - backup) ** 2)  # -before_tanh_c*1e-5
+
+            # q_loss = tf.reduce_mean((q - backup))
+            # q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
             # q_loss = p_mean(q_loss, p=2)
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return q_loss
+        return q_loss, q_loss_dic
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
@@ -391,7 +413,7 @@ def ddpg(
                 rews = tf.constant(batch["rews"])
                 dones = tf.constant(batch["done"])
                 # Q-learning update
-                loss_q = q_update(obs1, obs2, acts, rews, dones)
+                loss_q, q_loss_dic = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=loss_q)
                 weigths_and_biases.log({"Q-Loss": loss_q})
                 # print(loss_q)
@@ -463,6 +485,8 @@ def ddpg(
             # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
+
+            weigths_and_biases.log(q_loss_dic)
 
     # [optional] finish the wandb run, necessary in notebooks
     weigths_and_biases.finish()
