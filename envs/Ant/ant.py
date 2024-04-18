@@ -63,14 +63,17 @@ def multi_dim_reward(state, action, env: "AntEnv"):
     ctrl_reward_8 = 1 - env.control_cost(action[7])
 
     ctrl_reward_arr = np.array(
-        ctrl_reward_1,
-        ctrl_reward_2,
-        ctrl_reward_3,
-        ctrl_reward_4,
-        ctrl_reward_5,
-        ctrl_reward_6,
-        ctrl_reward_7,
-        ctrl_reward_8,
+        [
+            ctrl_reward_1,
+            ctrl_reward_2,
+            ctrl_reward_3,
+            ctrl_reward_4,
+            ctrl_reward_5,
+            ctrl_reward_6,
+            ctrl_reward_7,
+            ctrl_reward_8,
+        ],
+        dtype=np.float32,
     )
     ctrl_reward = p_mean(ctrl_reward_arr, p=0.0)
 
