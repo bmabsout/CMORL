@@ -96,7 +96,9 @@ def composed_reward_fn(state, action, env):
 def q_composer(q_values):
     qs_c = tf.reduce_mean(q_values, axis=0)
     q_control = p_mean(qs_c[1:], p=0.0)
-    q_c = p_mean([qs_c[0], q_control], p=-4.0)
+    qs_c = qs_c.numpy()
+    q_control = q_control.numpy()
+    q_c = p_mean([qs_c[0], q_control[0]], p=-4.0)
     # q_c = p_mean(qs_c, p=-4.0)
 
     return qs_c, q_c
