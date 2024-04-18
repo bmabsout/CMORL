@@ -14,7 +14,8 @@ from cmorl.utils.reward_utils import CMORL, RewardFnType
 
 
 def multi_dim_reward_joints(state, action, env: "AntEnv"):
-    forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
+    # forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
+    forward_reward = env.x_velocity / 2
     forward_reward = (forward_reward + 1) / 2
 
     # Create a reward for every action joint in the action array
@@ -46,11 +47,12 @@ def multi_dim_reward_joints(state, action, env: "AntEnv"):
 
 def multi_dim_reward(state, action, env: "AntEnv"):
     # forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
-    abs_x_velocity = np.abs(env.x_velocity)
-    forward_reward = (abs_x_velocity * env._forward_reward_weight) / (
-        abs_x_velocity * env._forward_reward_weight + 1
-    )
-    # forward_reward = (forward_reward + 1) / 2
+    # abs_x_velocity = np.abs(env.x_velocity)
+    # forward_reward = (abs_x_velocity * env._forward_reward_weight) / (
+    #     abs_x_velocity * env._forward_reward_weight + 1
+    # )
+    forward_reward = env.x_velocity / 2
+    forward_reward = (forward_reward + 1) / 2
 
     # Create a reward for every action joint in the action array
     ctrl_reward_1 = 1 - env.control_cost(action[0])
@@ -93,7 +95,10 @@ def composed_reward_fn(state, action, env):
 @tf.function
 def q_composer(q_values):
     qs_c = tf.reduce_mean(q_values, axis=0)
-    q_c = p_mean(qs_c, p=-4.0)
+    q_control = p_mean(qs_c[1:], p=0.0)
+    q_c = p_mean([qs_c[0], q_control], p=-4.0)
+    # q_c = p_mean(qs_c, p=-4.0)
+
     return qs_c, q_c
 
 
