@@ -97,7 +97,9 @@ def q_composer(q_values):
     qs_c = tf.reduce_mean(q_values, axis=0)
     q_control = p_mean(qs_c[1:], p=0.0)
     # Compose the first q-value with the q_control using the p-mean
-    print("\n\n", [qs_c[0], q_control], "\n\n")
+    # Change the tensors to arrays first
+    qs_c = qs_c.numpy()
+    q_control = q_control.numpy()
     q_c = p_mean([qs_c[0], q_control], p=-4.0)
     # q_c = p_mean(qs_c, p=-4.0)
 
