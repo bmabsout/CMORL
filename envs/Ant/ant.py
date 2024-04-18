@@ -77,7 +77,7 @@ def multi_dim_reward(state, action, env: "AntEnv"):
     )
     ctrl_reward = p_mean(ctrl_reward_arr, p=0.0)
 
-    rw_vec = np.array([forward_reward, ctrl_reward], dtype=np.float32)
+    rw_vec = np.array([forward_reward, ctrl_reward[0]], dtype=np.float32)
     return rw_vec
 
 
