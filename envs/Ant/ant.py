@@ -52,14 +52,34 @@ def multi_dim_reward(state, action, env: "AntEnv"):
     )
     # forward_reward = (forward_reward + 1) / 2
 
-    ctrl_reward = 1 - env.control_cost(action) / 8
+    # Create a reward for every action joint in the action array
+    ctrl_reward_1 = 1 - env.control_cost(action[0])
+    ctrl_reward_2 = 1 - env.control_cost(action[1])
+    ctrl_reward_3 = 1 - env.control_cost(action[2])
+    ctrl_reward_4 = 1 - env.control_cost(action[3])
+    ctrl_reward_5 = 1 - env.control_cost(action[4])
+    ctrl_reward_6 = 1 - env.control_cost(action[5])
+    ctrl_reward_7 = 1 - env.control_cost(action[6])
+    ctrl_reward_8 = 1 - env.control_cost(action[7])
 
-    rw_vec = np.array([forward_reward, ctrl_reward**0.25], dtype=np.float32)
+    ctrl_reward_arr = np.array(
+        ctrl_reward_1,
+        ctrl_reward_2,
+        ctrl_reward_3,
+        ctrl_reward_4,
+        ctrl_reward_5,
+        ctrl_reward_6,
+        ctrl_reward_7,
+        ctrl_reward_8,
+    )
+    ctrl_reward = p_mean(ctrl_reward_arr, p=0.0)
+
+    rw_vec = np.array([forward_reward, ctrl_reward], dtype=np.float32)
     return rw_vec
 
 
 def composed_reward_fn(state, action, env):
-    rew_vec = multi_dim_reward(state, action, env)
+    rew_vec = multi_dim_reward_joints(state, action, env)
     # combine the rewards from indecies 1 to 8
     cost_reward = p_mean(rew_vec[1:], p=0.0)
     vel_reward = rew_vec[0]
