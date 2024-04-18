@@ -15,8 +15,9 @@ def parse_args_and_train(args=None):
         q_lr=cmd_args.learning_rate,
         pi_lr=cmd_args.learning_rate,
         seed=cmd_args.seed,
-        # max_ep_len=200,
-        max_ep_len=1000,
+        max_ep_len=200,
+        steps_per_epoch=1000,
+        # max_ep_len=1000,
     )
     generated_params = train_utils.create_train_folder_and_params(
         "Ant-Custom", hp, cmd_args, serializer
