@@ -33,14 +33,14 @@ def multi_dim_reward_joints(state, action, env: "AntEnv"):
     rw_vec = np.array(
         [
             forward_reward,
-            ctrl_reward_1,
-            ctrl_reward_2,
-            ctrl_reward_3,
-            ctrl_reward_4,
-            ctrl_reward_5,
-            ctrl_reward_6,
-            ctrl_reward_7,
-            ctrl_reward_8,
+            ctrl_reward_1**0.5,
+            ctrl_reward_2**0.5,
+            ctrl_reward_3**0.5,
+            ctrl_reward_4**0.5,
+            ctrl_reward_5**0.5,
+            ctrl_reward_6**0.5,
+            ctrl_reward_7**0.5,
+            ctrl_reward_8**0.5,
         ],
         dtype=np.float32,
     )
