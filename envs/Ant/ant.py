@@ -15,7 +15,9 @@ from cmorl.utils.reward_utils import CMORL, RewardFnType
 
 def multi_dim_reward_joints(state, action, env: "AntEnv"):
     # forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
-    forward_reward = env.x_velocity / 2
+    forward_reward = env.x_velocity / 1.5
+    # clip the value between -1 and 1
+    forward_reward = np.clip(forward_reward, -1, 1)
     forward_reward = (forward_reward + 1) / 2
 
     # Create a reward for every action joint in the action array
