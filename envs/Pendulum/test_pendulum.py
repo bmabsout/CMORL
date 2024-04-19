@@ -2,7 +2,6 @@ import numpy as np
 from Pendulum import PendulumEnv
 import argparse
 from cmorl.utils import test_utils
-import time
 
 
 def parse_args(args=None):
@@ -27,6 +26,7 @@ def parse_args(args=None):
 if __name__ == "__main__":
     # import matplotlib.pyplot as plt
     cmd_args = parse_args()
+    cmd_args.steps = 100
     runs = test_utils.run_tests(
         PendulumEnv(render_mode="human" if cmd_args.render else None), cmd_args
     )
