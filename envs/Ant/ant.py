@@ -14,10 +14,7 @@ from cmorl.utils.reward_utils import CMORL, RewardFnType
 
 
 def multi_dim_reward_joints(state, action, env: "AntEnv"):
-    # forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
-    forward_reward = env.x_velocity / 1.5
-    # clip the value between -1 and 1
-    forward_reward = np.clip(forward_reward, -1, 1)
+    forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
     forward_reward = (forward_reward + 1) / 2
 
     # Create a reward for every action joint in the action array
@@ -33,14 +30,14 @@ def multi_dim_reward_joints(state, action, env: "AntEnv"):
     rw_vec = np.array(
         [
             forward_reward,
-            ctrl_reward_1**0.5,
-            ctrl_reward_2**0.5,
-            ctrl_reward_3**0.5,
-            ctrl_reward_4**0.5,
-            ctrl_reward_5**0.5,
-            ctrl_reward_6**0.5,
-            ctrl_reward_7**0.5,
-            ctrl_reward_8**0.5,
+            ctrl_reward_1,
+            ctrl_reward_2,
+            ctrl_reward_3,
+            ctrl_reward_4,
+            ctrl_reward_5,
+            ctrl_reward_6,
+            ctrl_reward_7,
+            ctrl_reward_8,
         ],
         dtype=np.float32,
     )
@@ -81,7 +78,7 @@ def multi_dim_reward(state, action, env: "AntEnv"):
     )
     ctrl_reward = p_mean(ctrl_reward_arr, p=0.0)
 
-    rw_vec = np.array([forward_reward, ctrl_reward[0]], dtype=np.float32)
+    rw_vec = np.array([forward_reward, ctrl_reward], dtype=np.float32)
     return rw_vec
 
 
@@ -96,11 +93,12 @@ def composed_reward_fn(state, action, env):
 
 @tf.function
 def q_composer(q_values):
+    # TODO: Implement a p_mean composer just like in q-loss
     qs_c = tf.reduce_mean(q_values, axis=0)
-    q_control = p_mean(qs_c[1:], p=0.0)
-    # Compose the first q-value with the q_control using the p-mean as a tensor
-    q_c = p_mean(tf.concat([qs_c[0:1], q_control], axis=0), p=-4.0)
-    # q_c = p_mean(qs_c, p=-4.0)
+    # q_control = p_mean(qs_c[1:], p=0.0)
+    # # Compose the first q-value with the q_control using the p-mean as a tensor
+    # q_c = p_mean(tf.concat([qs_c[0:1], q_control], axis=0), p=-4.0)
+    q_c = p_mean(qs_c, p=-4.0)
 
     return qs_c, q_c
 

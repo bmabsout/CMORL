@@ -1,26 +1,25 @@
-from dataclasses import asdict, dataclass
-from typing import Any, Callable, Dict
-import numpy as np
-import tensorflow as tf
-import gymnasium as gym
-import time
-from cmorl.rl_algs.ddpg import core
-from cmorl.utils.logx import TensorflowLogger
-from cmorl.utils.loss_composition import (
-    p_mean,
-    scale_gradient,
-    move_toward_zero,
-    sigmoid_regularizer,
-)
-import keras
-
-import wandb
-
 # adapted from https://github.com/tanzhenyu/spinup-tf2/blob/master/spinup/algos/ddpg/ddpg.py
 
 
 # This script needs these libraries to be installed:
 #   tensorflow, numpy
+import time
+from dataclasses import asdict, dataclass
+from typing import Any, Callable, Dict
+import numpy as np
+import tensorflow as tf
+import gymnasium as gym
+import keras
+import wandb
+from cmorl.rl_algs.ddpg import core
+from cmorl.utils.logx import TensorflowLogger
+from cmorl.utils.loss_composition import (
+    geo,
+    p_mean,
+    scale_gradient,
+    move_toward_zero,
+    sigmoid_regularizer,
+)
 
 
 class ReplayBuffer:
@@ -106,6 +105,8 @@ def ddpg(
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
+    run_name: str = None,
+    run_description: str = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
     """
@@ -176,12 +177,6 @@ def ddpg(
 
     """
     # start a new wandb run to track this script
-    weigths_and_biases = wandb.init(
-        # set the wandb project where this run will be logged
-        project="Ant",
-        # track hyperparameters and run metadata
-        config=hp.__dict__,
-    )
 
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
@@ -190,6 +185,20 @@ def ddpg(
     np.random.seed(hp.seed)
 
     env = env_fn()
+
+    weights_and_biases = wandb.init(
+        # set the wandb project where this run will be logged
+        project=type(env).__name__,
+        # track hyperparameters and run metadata
+        config=hp.__dict__,
+        # name the run
+        name=(
+            run_name if run_name is not None else f"{type(env).__name__}-{time.time()}"
+        ),
+        # write a description of the run
+        notes=run_description,
+    )
+
     assert isinstance(
         env.action_space, gym.spaces.Box
     ), "only continuous action space is supported"
@@ -207,10 +216,6 @@ def ddpg(
             env.observation_space, env.action_space, rew_dims, **hp.ac_kwargs
         )
 
-        # before_tanh_output = pi_network.layers[-1].output
-        print(pi_network.output)
-        print(pi_network.layers[-2].output)
-        print(pi_network.input)
         pi_and_before_tanh = keras.Model(
             pi_network.input,
             {"pi": pi_network.output, "before_tanh": pi_network.layers[-2].output},
@@ -266,46 +271,51 @@ def ddpg(
             before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid))
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
-            # q_pi_targ_squeezed = tf.squeeze(q_pi_targ, axis=1)
 
-            # rewards = tf.squeeze(rews, axis=1)
-            # TODO: tf.tile -> search about it
-            # dones = tf.tile(tf.expand_dims(dones, axis=-1), [1, rew_dims])
             batch_size = tf.shape(dones)[0]
 
-            # calculate q_loss for every single reward by looping through them
-            dones_i = dones
-            dones_i = tf.broadcast_to(tf.expand_dims(dones_i, -1), (batch_size, 1))
-
-            # split rews and q_pi_targ along the last axis
-            rews_i = rews
-            rews_i = tf.split(rews_i, rew_dims, axis=-1)
-            q_pi_targ_i = q_pi_targ
-            q_pi_targ_i = tf.split(q_pi_targ_i, rew_dims, axis=-1)
-
-            # create a dict to store the loss for each reward
-            q_loss_dic = {}
-            for i in range(rew_dims):
-                backup_i = tf.stop_gradient(
-                    rews_i[i] / max_q_val[i] + (1 - dones_i) * hp.gamma * q_pi_targ_i[i]
-                )
-                q_loss_i = tf.reduce_mean((q[:, i] - backup_i) ** 2)
-                q_loss_dic[f"Q-loss_{i}"] = q_loss_i
+            # # calculate q_loss for every single reward by looping through them
+            # dones_i = dones
+            # dones_i = tf.broadcast_to(tf.expand_dims(dones_i, -1), (batch_size, 1))
+            # # split rews and q_pi_targ along the last axis
+            # rews_i = rews
+            # rews_i = tf.split(rews_i, rew_dims, axis=-1)
+            # q_pi_targ_i = q_pi_targ
+            # q_pi_targ_i = tf.split(q_pi_targ_i, rew_dims, axis=-1)
+            # # create a dict to store the loss for each reward
+            # q_loss_dic = {}
+            # for i in range(rew_dims):
+            #     backup_i = tf.stop_gradient(
+            #         rews_i[i] / max_q_val[i] + (1 - dones_i) * hp.gamma * q_pi_targ_i[i]
+            #     )
+            #     q_loss_i = p_mean(1 - tf.abs(q[:, i] - backup_i), p=0.0)
+            #     q_loss_dic[f"Q-loss_{i}"] = q_loss_i
 
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
 
             backup = tf.stop_gradient(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
-            q_loss = tf.reduce_mean((q - backup) ** 2)  # -before_tanh_c*1e-5
+            qc_losses = p_mean(
+                1.0 - tf.abs(q - backup),
+                p=-4.0,
+                axis=0,
+            )  # -before_tanh_c*1e-5
 
-            # q_loss = tf.reduce_mean((q - backup))
+            # q_loss_dic = {}
+            # tf.print(qc_losses)
+            # for i in range(tf.shape(qc_losses)[0]):
+            #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
+
+            qc_loss = 1.0 - p_mean(qc_losses, -4.0)
+
             # q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
             # q_loss = p_mean(q_loss, p=2)
-        grads = tape.gradient(q_loss, q_network.trainable_variables)
+
+        grads = tape.gradient(qc_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return q_loss, q_loss_dic
+        return qc_loss, qc_losses
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
@@ -413,9 +423,9 @@ def ddpg(
                 rews = tf.constant(batch["rews"])
                 dones = tf.constant(batch["done"])
                 # Q-learning update
-                loss_q, q_loss_dic = q_update(obs1, obs2, acts, rews, dones)
+                loss_q, q_losses = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=loss_q)
-                weigths_and_biases.log({"Q-Loss": loss_q})
+                weights_and_biases.log({"Q-Loss": loss_q})
                 # print(loss_q)
                 # Policy update
                 (
@@ -431,14 +441,14 @@ def ddpg(
                     Q_comp=q_c,
                     Before_tanh=before_tanh_c,
                 )
-                weigths_and_biases.log(
+                weights_and_biases.log(
                     {"Q-composed": q_c, "Before_tanh": before_tanh_c}
                 )
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
                     qs_dict_[f"Q{i}"] = q
                 logger.store(**qs_dict_)
-                weigths_and_biases.log(qs_dict_)
+                weights_and_biases.log(qs_dict_)
 
                 # target update
                 target_update()
@@ -449,9 +459,9 @@ def ddpg(
             for i in range(rew_dims):
                 ret_dict_[f"EpRet_{i}"] = ep_ret[i]
             logger.store(**ret_dict_)
-            weigths_and_biases.log(ret_dict_)
+            weights_and_biases.log(ret_dict_)
             logger.store(EpLen=ep_len)
-            weigths_and_biases.log({"EpLen": ep_len})
+            weights_and_biases.log({"EpLen": ep_len})
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -470,7 +480,7 @@ def ddpg(
             # Log info about epoch
             # logger.log_tabular("Epoch", epoch)
             logger.log_tabular("Episode", epoch)
-            weigths_and_biases.log({"Episode": epoch})
+            weights_and_biases.log({"Episode": epoch})
             # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             for i in range(rew_dims):
@@ -486,10 +496,12 @@ def ddpg(
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
 
-            weigths_and_biases.log(q_loss_dic)
+            weights_and_biases.log(
+                {f"LossQ[{i}]": q_loss for i, q_loss in enumerate(q_losses)}
+            )
 
     # [optional] finish the wandb run, necessary in notebooks
-    weigths_and_biases.finish()
+    weights_and_biases.finish()
 
     return pi_network
 
