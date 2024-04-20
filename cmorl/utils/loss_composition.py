@@ -7,29 +7,54 @@ def geo(l, axis=0):
     return tf.exp(tf.reduce_mean(tf.math.log(l), axis=axis))
 
 
+# @tf.function
+# def p_mean(l, p, slack=0.0, axis=1):
+#     slacked = l + slack
+#     if len(slacked.shape) == 1:  # enforce having batches
+#         slacked = tf.expand_dims(slacked, axis=0)
+#     batch_size = slacked.shape[0]
+#     zeros = tf.zeros(batch_size, l.dtype)
+#     ones = tf.ones(batch_size, l.dtype)
+#     handle_zeros = (
+#         tf.reduce_all(slacked > 1e-20, axis=axis)
+#         if p <= 1e-20
+#         else tf.fill((batch_size,), True)
+#     )
+#     escape_from_nan = tf.where(
+#         tf.expand_dims(handle_zeros, axis=axis), slacked, slacked * 0.0 + 1.0
+#     )
+#     handled = (
+#         geo(escape_from_nan, axis=axis)
+#         if p == 0
+#         else tf.reduce_mean(escape_from_nan**p, axis=axis) ** (1.0 / p)
+#     ) - slack
+#     res = tf.where(handle_zeros, handled, zeros)
+#     return res
+
+
 @tf.function
-def p_mean(l, p, slack=0.0, axis=1):
-    slacked = l + slack
-    if len(slacked.shape) == 1:  # enforce having batches
-        slacked = tf.expand_dims(slacked, axis=0)
-    batch_size = slacked.shape[0]
-    zeros = tf.zeros(batch_size, l.dtype)
-    ones = tf.ones(batch_size, l.dtype)
-    handle_zeros = (
-        tf.reduce_all(slacked > 1e-20, axis=axis)
-        if p <= 1e-20
-        else tf.fill((batch_size,), True)
-    )
-    escape_from_nan = tf.where(
-        tf.expand_dims(handle_zeros, axis=axis), slacked, slacked * 0.0 + 1.0
-    )
-    handled = (
-        geo(escape_from_nan, axis=axis)
-        if p == 0
-        else tf.reduce_mean(escape_from_nan**p, axis=axis) ** (1.0 / p)
-    ) - slack
-    res = tf.where(handle_zeros, handled, zeros)
-    return res
+def tf_pop(tensor, axis):
+    return tf.concat([tf.slice(tensor, [0], [axis]), tf.slice(tensor, [axis+1], [-1])], 0)
+
+
+@tf.function
+def p_mean(l, p: float, slack=1e-15, default_val=tf.constant(0.0), axis=None):
+    """
+    The Generalized mean
+    l: a tensor of elements we would like to compute the p_mean with respect to, elements must be > 0.0
+    p: the value of the generalized mean, p = -1 is the harmonic mean, p = 1 is the regular mean, p=inf is the max function ...
+    slack: allows elements to be at 0.0 with p < 0.0 without collapsing the pmean to 0.0 fully allowing useful gradient information to leak
+    axis: axis or axese to collapse the pmean with respect to, None would collapse all
+    https://www.wolframcloud.com/obj/26a59837-536e-4e9e-8ed1-b1f7e6b58377
+    """
+    p = tf.cast(p, tf.float32)
+    l = tf.cast(l, tf.float32)
+    p = tf.where(tf.abs(tf.cast(p, tf.float32)) < 1e-5, -1e-5 if p < 0.0 else 1e-5, p)
+
+    return tf.cond(tf.reduce_prod(tf.shape(l)) == 0 # condition if an empty array is fed in
+        , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(l), axis)) if axis else default_val
+        , lambda: tf.reduce_mean((l + slack)**p, axis=axis))**(1.0/p) - slack
+        # tf.debugging.assert_greater_equal(l, 0.0)
 
 
 @tf.function
