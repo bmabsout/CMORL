@@ -25,7 +25,15 @@ def parse_args_and_train(args=None):
         reward_fn=ant.multi_dim_reward_joints,
         # render_mode="human",
     )
-    ddpg(env_fn, **generated_params)
+    ddpg(
+        env_fn,
+        run_name="Ant-ddpg-tanh+all-joints",
+        run_description="""In this run, we use DDPG with tanh for calculating the velocity reward
+        and all joints for the actuation reward. The reward is a vector of 9 elements, where the first
+        is the velocity reward and the rest are the actuation rewards for each joint. The q-values are then
+        composed all together in a single step with p_mean=-4.0 after reducing the q-values across the batch.""",
+        **generated_params
+    )
 
 
 if __name__ == "__main__":

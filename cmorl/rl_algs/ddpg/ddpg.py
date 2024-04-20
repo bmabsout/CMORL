@@ -105,6 +105,8 @@ def ddpg(
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
+    run_name: str = None,
+    run_description: str = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
     """
@@ -175,7 +177,6 @@ def ddpg(
 
     """
     # start a new wandb run to track this script
-   
 
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
@@ -185,11 +186,17 @@ def ddpg(
 
     env = env_fn()
 
-    weigths_and_biases = wandb.init(
+    weights_and_biases = wandb.init(
         # set the wandb project where this run will be logged
         project=type(env).__name__,
         # track hyperparameters and run metadata
         config=hp.__dict__,
+        # name the run
+        name=(
+            run_name if run_name is not None else f"{type(env).__name__}-{time.time()}"
+        ),
+        # write a description of the run
+        notes=run_description,
     )
 
     assert isinstance(
@@ -418,7 +425,7 @@ def ddpg(
                 # Q-learning update
                 loss_q, q_losses = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=loss_q)
-                weigths_and_biases.log({"Q-Loss": loss_q})
+                weights_and_biases.log({"Q-Loss": loss_q})
                 # print(loss_q)
                 # Policy update
                 (
@@ -434,14 +441,14 @@ def ddpg(
                     Q_comp=q_c,
                     Before_tanh=before_tanh_c,
                 )
-                weigths_and_biases.log(
+                weights_and_biases.log(
                     {"Q-composed": q_c, "Before_tanh": before_tanh_c}
                 )
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
                     qs_dict_[f"Q{i}"] = q
                 logger.store(**qs_dict_)
-                weigths_and_biases.log(qs_dict_)
+                weights_and_biases.log(qs_dict_)
 
                 # target update
                 target_update()
@@ -452,9 +459,9 @@ def ddpg(
             for i in range(rew_dims):
                 ret_dict_[f"EpRet_{i}"] = ep_ret[i]
             logger.store(**ret_dict_)
-            weigths_and_biases.log(ret_dict_)
+            weights_and_biases.log(ret_dict_)
             logger.store(EpLen=ep_len)
-            weigths_and_biases.log({"EpLen": ep_len})
+            weights_and_biases.log({"EpLen": ep_len})
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -473,7 +480,7 @@ def ddpg(
             # Log info about epoch
             # logger.log_tabular("Epoch", epoch)
             logger.log_tabular("Episode", epoch)
-            weigths_and_biases.log({"Episode": epoch})
+            weights_and_biases.log({"Episode": epoch})
             # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             for i in range(rew_dims):
@@ -489,10 +496,12 @@ def ddpg(
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
 
-            weigths_and_biases.log({f"LossQ[{i}]": q_loss for i, q_loss in enumerate(q_losses)})
+            weights_and_biases.log(
+                {f"LossQ[{i}]": q_loss for i, q_loss in enumerate(q_losses)}
+            )
 
     # [optional] finish the wandb run, necessary in notebooks
-    weigths_and_biases.finish()
+    weights_and_biases.finish()
 
     return pi_network
 
