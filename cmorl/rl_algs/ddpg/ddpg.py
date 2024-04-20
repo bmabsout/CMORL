@@ -175,12 +175,7 @@ def ddpg(
 
     """
     # start a new wandb run to track this script
-    weigths_and_biases = wandb.init(
-        # set the wandb project where this run will be logged
-        project="Ant",
-        # track hyperparameters and run metadata
-        config=hp.__dict__,
-    )
+   
 
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
@@ -189,6 +184,14 @@ def ddpg(
     np.random.seed(hp.seed)
 
     env = env_fn()
+
+    weigths_and_biases = wandb.init(
+        # set the wandb project where this run will be logged
+        project=type(env).__name__,
+        # track hyperparameters and run metadata
+        config=hp.__dict__,
+    )
+
     assert isinstance(
         env.action_space, gym.spaces.Box
     ), "only continuous action space is supported"
@@ -206,10 +209,6 @@ def ddpg(
             env.observation_space, env.action_space, rew_dims, **hp.ac_kwargs
         )
 
-        # before_tanh_output = pi_network.layers[-1].output
-        # print(pi_network.output)
-        # print(pi_network.layers[-2].output)
-        # print(pi_network.input)
         pi_and_before_tanh = keras.Model(
             pi_network.input,
             {"pi": pi_network.output, "before_tanh": pi_network.layers[-2].output},
@@ -290,16 +289,18 @@ def ddpg(
             backup = tf.stop_gradient(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
-            qc_losses = geo(
-                1 - tf.abs(q - backup),
+            qc_losses = p_mean(
+                1.0 - tf.abs(q - backup),
+                p=-4.0,
                 axis=0,
             )  # -before_tanh_c*1e-5
 
-            q_loss_dic = {}
-            for i in range(qc_losses.shape[0]):
-                q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
+            # q_loss_dic = {}
+            # tf.print(qc_losses)
+            # for i in range(tf.shape(qc_losses)[0]):
+            #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
 
-            qc_loss = 1 - geo(qc_losses)
+            qc_loss = 1.0 - p_mean(qc_losses, -4.0)
 
             # q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
             # q_loss = p_mean(q_loss, p=2)
@@ -307,7 +308,7 @@ def ddpg(
         grads = tape.gradient(qc_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return qc_loss, q_loss_dic
+        return qc_loss, qc_losses
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
@@ -415,7 +416,7 @@ def ddpg(
                 rews = tf.constant(batch["rews"])
                 dones = tf.constant(batch["done"])
                 # Q-learning update
-                loss_q, q_loss_dic = q_update(obs1, obs2, acts, rews, dones)
+                loss_q, q_losses = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=loss_q)
                 weigths_and_biases.log({"Q-Loss": loss_q})
                 # print(loss_q)
@@ -488,7 +489,7 @@ def ddpg(
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
 
-            weigths_and_biases.log(q_loss_dic)
+            weigths_and_biases.log({f"LossQ[{i}]": q_loss for i, q_loss in enumerate(q_losses)})
 
     # [optional] finish the wandb run, necessary in notebooks
     weigths_and_biases.finish()
