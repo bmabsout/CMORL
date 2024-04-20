@@ -16,6 +16,7 @@ def parse_args_and_train(args=None):
         pi_lr=cmd_args.learning_rate,
         seed=cmd_args.seed,
         max_ep_len=200,
+        steps_per_epoch=1000,
     )
     generated_params = train_utils.create_train_folder_and_params(
         "Pendulum-custom", hp, cmd_args, serializer
@@ -23,7 +24,12 @@ def parse_args_and_train(args=None):
     env_fn = lambda: PendulumEnv(
         g=10.0, setpoint=0.0, reward_fn=Pendulum.multi_dim_reward
     )
-    ddpg(env_fn, **generated_params)
+    ddpg(
+        env_fn,
+        # run_name="Pendulum-ddpg",
+        # run_description="Testing the modification of weights and biases.",
+        **generated_params
+    )
 
 
 if __name__ == "__main__":
