@@ -51,6 +51,8 @@ def multi_dim_reward(state, action, env: "AntEnv"):
     #     abs_x_velocity * env._forward_reward_weight + 1
     # )
     forward_reward = env.x_velocity / 2
+    # if the velocity is negative, then scale it between 0 and 0.1
+
     forward_reward = (forward_reward + 1) / 2
 
     # Create a reward for every action joint in the action array
