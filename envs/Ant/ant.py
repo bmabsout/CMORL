@@ -15,7 +15,12 @@ from cmorl.utils.reward_utils import CMORL, RewardFnType
 
 def multi_dim_reward_joints(state, action, env: "AntEnv"):
     forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
-    forward_reward = (forward_reward + 1) / 2
+    # if the forward_reward is negative, it should be scaled between 0 and 0.1
+    if forward_reward < 0:
+        forward_reward = (forward_reward + 1) / 10.0
+    else:
+        # if the forward_reward is positive, it should be scaled between 0.1 and 1
+        forward_reward = ((forward_reward + 1) / 2.0) * 0.9 + 0.1
 
     # Create a reward for every action joint in the action array
     ctrl_reward_1 = 1 - env.control_cost(action[0])
@@ -45,19 +50,15 @@ def multi_dim_reward_joints(state, action, env: "AntEnv"):
 
 
 def multi_dim_reward(state, action, env: "AntEnv"):
-<<<<<<< HEAD
-    # forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
-    # abs_x_velocity = np.abs(env.x_velocity)
-    # forward_reward = (abs_x_velocity * env._forward_reward_weight) / (
-    #     abs_x_velocity * env._forward_reward_weight + 1
-    # )
-    forward_reward = env.x_velocity / 2
-    # if the velocity is negative, then scale it between 0 and 0.1
 
-=======
     forward_reward = np.tanh(env._forward_reward_weight * env.x_velocity)
->>>>>>> 1b0b102c46bc6814bc0bbce3458808b5ccb41373
-    forward_reward = (forward_reward + 1) / 2
+
+    # if the forward_reward is negative, it should be scaled between 0 and 0.1
+    if forward_reward < 0:
+        forward_reward = (forward_reward + 1) / 10.0
+    else:
+        # if the forward_reward is positive, it should be scaled between 0.1 and 1
+        forward_reward = ((forward_reward + 1) / 2.0) * 0.9 + 0.1
 
     # Create a reward for every action joint in the action array
     ctrl_reward_1 = 1 - env.control_cost(action[0])
