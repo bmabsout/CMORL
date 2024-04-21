@@ -5,6 +5,7 @@ wandb/
 trained
 wandb
 MUJOCO_LOG.TXT
+velocity.txt
 *.p
 *.pb
 # Byte-compiled / optimized / DLL files
