@@ -389,7 +389,9 @@ def ddpg(
             a = env.action_space.sample()
 
         if np.isnan(a).any():
-            a = env.action_space.sample()
+            # a = env.action_space.sample()
+            print("nan detected")
+            exit(1)
 
         # Step the env
         o2, r, d, _, _ = env.step(a)
