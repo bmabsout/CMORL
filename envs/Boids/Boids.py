@@ -12,14 +12,49 @@ import tensorflow as tf
 from cmorl.utils.loss_composition import p_mean
 from cmorl.utils.reward_utils import CMORL, RewardFnType
 
-def multi_dim_reward(state, action, env: "BoidsEnv"):
-
-    return np.array([0.0])
-
-
-def composed_reward_fn(state, action, env: "BoidsEnv"):
+@tf.function
+def pairwise_dist(A, B):
+    """
+        Computes pairwise distances between each elements of A and each elements of B.
+        Args:
+            A,    [d,m] matrix
+            B,    [d,n] matrix
+        Returns:
+            distances,    [(m*n-1)/2] vector of pairwise distances
+    """
+    matrix = tf.reduce_sum((tf.expand_dims(tf.transpose(A), 1)-tf.expand_dims(tf.transpose(B), 0))**2,axis=2)
     
+    upper_triangle = tf.where(tf.linalg.band_part(tf.ones_like(matrix), -1, 0) == 0.0, True, False)
+    distances = tf.boolean_mask(matrix, upper_triangle)
+    return distances
+
+def multi_dim_reward(flat_state, flat_u, env: "BoidsEnv"):
+    state = convert_state_to_dict(flat_state, env.numBoids)
+    action = convert_action_to_dict(flat_u, env.numBoids)
+    go_fast = tf.norm(state["vel"], axis=0)/env.max_speed
+    dists = pairwise_dist(state["pos"], state["pos"])
+    minimize_distance = 1.0 - dists
+    avoid_collisions = tf.where(dists < 0.025, dists/0.025, 1.0)
+    small_actions = 1.0 - tf.abs(action["angle_change"])/convert_action_to_dict(env.action_space.high, env.numBoids)["angle_change"]
+    # print("go_fast:", go_fast)
+    # print("minimize_distance:", minimize_distance)
+    # print("avoid_collisions:", avoid_collisions)
+    # print("small_actions:", small_actions)
+    return np.concatenate([go_fast, minimize_distance, avoid_collisions, small_actions])
+
+
+def composed_reward_fn(flat_state, flat_u, env: "BoidsEnv"):
     return 0.0
+
+@tf.function
+def convert_state_to_dict(flat_state: tf.Tensor, numBoids: int):
+    state = tf.cast(tf.transpose(tf.reshape(flat_state, (numBoids, 4))), tf.float32)
+    return {"pos": state[:2], "vel": state[2:]}
+
+@tf.function
+def convert_action_to_dict(flat_u: tf.Tensor, numBoids: int):
+    u = tf.cast(tf.transpose(tf.reshape(flat_u, (numBoids, 2))), tf.float32)
+    return {"setpoint_vel_mag": u[0], "angle_change": u[1]}
 
 
 @tf.function
@@ -27,7 +62,7 @@ def q_composer(q_values):
     # q1_c = q_values[0]
     # q2_c = q_values[1]
     # q_values = tf.stack([q1_c, q2_c], axis=0)
-    qs_c = tf.reduce_mean(q_values, axis=0)
+    qs_c = p_mean(q_values, p=0.0, axis=0)
     q_c = p_mean(qs_c, p=-4.0)
     return qs_c, q_c
 
@@ -54,7 +89,7 @@ class BoidsEnv(gym.Env):
     Actions:
         Type: Box(2*numBoids)
         Num     Action                      Min                     Max
-        0       acceleration                -max_acc                max_acc
+        0       setpoint velocity           0.0                     max_speed
         1       angular velocity            -max_angular_speed      max_angular_speed
         
     """
@@ -62,19 +97,22 @@ class BoidsEnv(gym.Env):
 
     metadata = {
         "render_modes": ["human", "rgb_array"],
-        "render_fps": 60,
+        "render_fps": 20,
     }
 
     def __init__(
         self,
         render_mode: Optional[str] = None,
         screen=None,
-        numBoids: int = 10,
+        numBoids: int = 5,
+        max_speed = 1.0,
+        max_angular_speed = 360.0*np.pi/180.0, # rads/s
         # reward_fn: RewardFnType = composed_reward_fn,
         reward_fn: RewardFnType = multi_dim_reward,
     ):
-        max_speed = 1.0
-        max_angular_speed = 360.0*np.pi/180.0 # rads/s
+        
+        self.max_speed = max_speed
+        self.numBoids = numBoids
 
         dt = 1.0/(self.metadata["render_fps"] if render_mode== "human" else 20.0)
 
@@ -85,9 +123,9 @@ class BoidsEnv(gym.Env):
         self.clock = None
         self.isopen = True
         
-        max_vel = np.array([max_speed, max_speed])
-        max_pos = np.array([1.0, 1.0])
-        min_pos = np.array([0.0, 0.0])
+        max_vel = np.array([max_speed, max_speed], dtype=np.float32)
+        max_pos = np.array([1.0, 1.0], dtype=np.float32)
+        min_pos = np.array([0.0, 0.0], dtype=np.float32)
         obs_low = np.tile(np.concatenate([min_pos, -max_vel]), numBoids)
         obs_high = np.tile(np.concatenate([max_pos, max_vel]), numBoids)
         self.observation_space = spaces.Box(
@@ -111,25 +149,20 @@ class BoidsEnv(gym.Env):
         def difference_eq(flat_state: tf.Tensor, flat_u: tf.Tensor):
             # state is a tensor of shape (4*numBoids)
             # u is a tensor of shape (2*numBoids)
-            state = tf.transpose(tf.reshape(flat_state, (numBoids, 4)))
-            # state has shape (4, numBoids)
-            pos = state[:2]
-            vel = state[2:]
-            u = tf.transpose(tf.reshape(flat_u, (numBoids, 2)))
-            setpoint_vel_mag = u[0]
-            angle_change = u[1]
+            state = convert_state_to_dict(flat_state, numBoids)
+            action = convert_action_to_dict(flat_u, numBoids)
             # get angle of vel
-            curr_angle = tf.atan2(vel[1], vel[0])
-            new_angle = curr_angle + angle_change*dt
+            curr_angle = tf.atan2(state["vel"][1], state["vel"][0])
+            new_angle = curr_angle + action["angle_change"]*dt
             new_anglexy = tf.stack([tf.cos(new_angle), tf.sin(new_angle)], axis=0)
             # using leapfrog integration
-            vel_mag = tf.norm(vel, axis=0)
-            new_vel_mag = vel_mag*(1.0 - dt) + setpoint_vel_mag*dt
+            vel_mag = tf.norm(state["vel"], axis=0)
+            new_vel_mag = vel_mag*(1.0 - dt) + action["setpoint_vel_mag"]*dt
             new_vel = new_anglexy*new_vel_mag
             # new_vel = vel*(1.0 - dt) + (setpoint_vel - vel)*dt
             # clamp velocity
-            # new_vel = tf.clip_by_norm(new_vel, max_speed)
-            new_pos = pos + new_vel*dt
+            new_vel = tf.clip_by_norm(new_vel, max_speed, axes=[0])
+            new_pos = state["pos"] + new_vel*dt
             # let the position wrap ala torus
             new_pos = tf.math.floormod(new_pos, 1.0)
             return tf.reshape(tf.transpose(tf.concat([new_pos, new_vel], axis=0)), [-1])
@@ -139,7 +172,6 @@ class BoidsEnv(gym.Env):
 
 
     def step(self, u):
-
         self.state = self.difference_eq(self.state, u)
         reward = self.cmorl(self.state, u, self)
         return self.state, reward, False, False, {}
@@ -219,9 +251,10 @@ def normed_angular_distance(a, b):
 
 
 if __name__ == "__main__":
-    env = BoidsEnv(numBoids=2, render_mode="human")
+    env = BoidsEnv(numBoids=3, render_mode="human")
     env.reset()
-    env.state = tf.constant([0.5, 0.5, 0.0, 0.0, 0.5,0.5,0.0,0.0], dtype=tf.float32)
+    # env.state = tf.constant([0.5, 0.5, 0.0, 0.0, 0.5,0.5,0.0,0.0], dtype=tf.float32)
+    # env.state = tf.constant([0.5, 0.5, 0.0, 0.0], dtype=tf.float32)
     for _ in range(1000):
         action = env.action_space.sample()
         action[0] = 1.0

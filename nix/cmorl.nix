@@ -15,15 +15,18 @@ buildPythonPackage rec {
     pygame
     pybullet
     matplotlib
-    (callPackage ./wandb.nix {})
+    # (callPackage ./wandb.nix {})
+    (wandb.override {protobuf = depFromTensorflow "protobuf";})
+    # wandb
     gymnasium
-    tensorflow-bin
+    tensorflow
     tqdm
     keras
     dm-tree
     rich
+    ml-dtypes
     pybox2d
-    (callPackage ./stable-baselines3.nix {})
-    (callPackage ./mujoco-py.nix {})
+    # (callPackage ./stable-baselines3.nix {})
+    # (callPackage ./mujoco-py.nix {})
   ];
 }
