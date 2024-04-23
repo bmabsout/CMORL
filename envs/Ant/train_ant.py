@@ -27,7 +27,7 @@ def parse_args_and_train(args=None):
     )
     ddpg(
         env_fn,
-        run_name="Ant-ddpg-tanh+all-joints-2",
+        run_name="Ant-ddpg-tanh+combined-joints-2",
         run_description="""In this run, we use DDPG with tanh for calculating the velocity reward
         and the combination of all joints for the actuation reward. The reward is a vector of 2 elements,
 	where the first is the velocity reward and second is the actuation reward calculated from the geometric
