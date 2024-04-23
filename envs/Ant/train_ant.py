@@ -22,19 +22,17 @@ def parse_args_and_train(args=None):
         "Ant-Custom", hp, cmd_args, serializer
     )
     env_fn = lambda: AntEnv(
-        reward_fn=ant.multi_dim_reward_joints,
+        reward_fn=ant.composed_reward_fn,
         # render_mode="human",
     )
     ddpg(
         env_fn,
-        run_name="Ant-ddpg-tanh+all-joints-2",
+        run_name="Ant-ddpg-tanh+combined-joints",
         run_description="""In this run, we use DDPG with tanh for calculating the velocity reward
         and the combination of all joints for the actuation reward. The reward is a vector of 2 elements,
 	where the first is the velocity reward and second is the actuation reward calculated from the geometric
-	mean of all actuation rewards for all joints. The q-values are then composed all together in a single step
-	with p_mean=-4.0 after reducing the q-values across the batch.
-    The thing about this run is that we are scaling the velocity reward to [0,0.1] if it is negative and
-    scaling it to [0.1,1] if it is positive.""",
+	mean of all actuation rewards for all joints using p=0. The q-values are then composed all together in a single step
+	with p_mean=-4.0 after reducing the q-values across the batch.""",
         **generated_params
     )
 
