@@ -17,6 +17,7 @@ def parse_args_and_train(args=None):
         pi_lr=cmd_args.learning_rate,
         seed=cmd_args.seed,
         max_ep_len=400,
+        gamma=0.99,
         steps_per_epoch=1000,
     )
     generated_params = train_utils.create_train_folder_and_params(
