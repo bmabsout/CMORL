@@ -2,6 +2,7 @@ experiments/
 trained/
 logs/
 wandb/
+.direnv/
 trained
 wandb
 MUJOCO_LOG.TXT
