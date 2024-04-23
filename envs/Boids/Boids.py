@@ -62,7 +62,7 @@ class BoidsEnv(gym.Env):
 
     metadata = {
         "render_modes": ["human", "rgb_array"],
-        "render_fps": 20,
+        "render_fps": 60,
     }
 
     def __init__(
@@ -73,10 +73,10 @@ class BoidsEnv(gym.Env):
         # reward_fn: RewardFnType = composed_reward_fn,
         reward_fn: RewardFnType = multi_dim_reward,
     ):
-        max_speed = 8
-        max_acc = 8
-        max_angular_speed = 30.0*np.pi/180.0 # rads/s
-        dt = 1.0/20.0
+        max_speed = 1.0
+        max_angular_speed = 360.0*np.pi/180.0 # rads/s
+
+        dt = 1.0/(self.metadata["render_fps"] if render_mode== "human" else 20.0)
 
         self.render_mode = render_mode
 
@@ -97,8 +97,8 @@ class BoidsEnv(gym.Env):
         )
 
         self.action_space = spaces.Box(
-            low=np.tile([-max_acc, -max_angular_speed], numBoids),
-            high=np.tile([max_acc, max_angular_speed], numBoids),
+            low=np.tile([0.0, -max_angular_speed], numBoids),
+            high=np.tile([max_speed, max_angular_speed], numBoids),
             dtype=np.float32
         )
 
@@ -107,7 +107,7 @@ class BoidsEnv(gym.Env):
         ).shape[0]
         self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
 
-        # @tf.function
+        @tf.function
         def difference_eq(flat_state: tf.Tensor, flat_u: tf.Tensor):
             # state is a tensor of shape (4*numBoids)
             # u is a tensor of shape (2*numBoids)
@@ -116,17 +116,23 @@ class BoidsEnv(gym.Env):
             pos = state[:2]
             vel = state[2:]
             u = tf.transpose(tf.reshape(flat_u, (numBoids, 2)))
+            setpoint_vel_mag = u[0]
             angle_change = u[1]
-            acc = u[0]
-            angle_changexy = tf.stack([tf.cos(angle_change), tf.sin(angle_change)], axis=0)
+            # get angle of vel
+            curr_angle = tf.atan2(vel[1], vel[0])
+            new_angle = curr_angle + angle_change*dt
+            new_anglexy = tf.stack([tf.cos(new_angle), tf.sin(new_angle)], axis=0)
             # using leapfrog integration
-            new_vel = vel + (acc * angle_changexy)*dt
+            vel_mag = tf.norm(vel, axis=0)
+            new_vel_mag = vel_mag*(1.0 - dt) + setpoint_vel_mag*dt
+            new_vel = new_anglexy*new_vel_mag
+            # new_vel = vel*(1.0 - dt) + (setpoint_vel - vel)*dt
             # clamp velocity
-            new_vel = tf.clip_by_norm(new_vel, max_speed)
+            # new_vel = tf.clip_by_norm(new_vel, max_speed)
             new_pos = pos + new_vel*dt
             # let the position wrap ala torus
             new_pos = tf.math.floormod(new_pos, 1.0)
-            return tf.reshape(tf.transpose(tf.concat([new_pos, new_vel], axis=0)), -1)
+            return tf.reshape(tf.transpose(tf.concat([new_pos, new_vel], axis=0)), [-1])
 
 
         self.difference_eq = difference_eq
@@ -207,17 +213,19 @@ class BoidsEnv(gym.Env):
             pygame.quit()
             self.isopen = False
 
-
 def normed_angular_distance(a, b):
     diff = (b - a + np.pi) % (2 * np.pi) - np.pi
     return np.abs(diff + 2 * np.pi if diff < -np.pi else diff) / np.pi
 
 
 if __name__ == "__main__":
-    env = BoidsEnv(numBoids=1, render_mode="human")
+    env = BoidsEnv(numBoids=2, render_mode="human")
     env.reset()
-    env.state = tf.constant([0.5, 0.5, 0.0, 0.0], dtype=tf.float32)
+    env.state = tf.constant([0.5, 0.5, 0.0, 0.0, 0.5,0.5,0.0,0.0], dtype=tf.float32)
     for _ in range(1000):
-        env.step(env.action_space.sample())
+        action = env.action_space.sample()
+        action[0] = 1.0
+        action[1] = env.action_space.high[1]
+        env.step(action)
         env.render()
     env.close()
