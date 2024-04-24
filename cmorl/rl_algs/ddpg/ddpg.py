@@ -190,6 +190,7 @@ def ddpg(
         # set the wandb project where this run will be logged
         project=type(env).__name__,
         # track hyperparameters and run metadata
+        entity="cmorl",
         config=hp.__dict__,
         # name the run
         name=(
@@ -348,7 +349,7 @@ def ddpg(
         return all_c, qs_c, q_c, before_tanh_c
 
     def get_action(o, noise_scale):
-        minus_1_to_1 = pi_network(tf.constant(o.reshape(1, -1))).numpy()[0]
+        minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
         noise = noise_scale * np.random.randn(act_dim)
         a = (minus_1_to_1 + noise) * (
             env.action_space.high - env.action_space.low
