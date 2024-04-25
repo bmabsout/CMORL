@@ -13,7 +13,6 @@ def parse_args(args=None):
         "-r", "--render", action="store_true", help="render the env as it evaluates"
     )
     parser.add_argument("-n", "--num_tests", type=int, default=20)
-    # group = parser.add_mutually_exclusive_group()
     parser.add_argument(
         "-l",
         "--use_latest",
