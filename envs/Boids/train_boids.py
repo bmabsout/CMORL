@@ -8,7 +8,7 @@ def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=50, learning_rate=1e-3)
+    serializer = args_utils.default_serializer(epochs=200, learning_rate=1e-3)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams(
         ac_kwargs={"actor_hidden_sizes": (256, 256), "critic_hidden_sizes": (512, 512)},

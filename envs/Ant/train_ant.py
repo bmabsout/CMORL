@@ -1,5 +1,4 @@
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
-from cmorl.utils import args_utils
 from ant import AntEnv
 import ant
 
@@ -18,16 +17,13 @@ def parse_args_and_train(args=None):
         max_ep_len=400,
         steps_per_epoch=1000,
     )
-    generated_params = train_utils.create_train_folder_and_params(
-        "Ant-Custom", hp, cmd_args, serializer
-    )
+    generated_params = train_utils.create_train_folder_and_params("Ant-custom", hp, cmd_args, serializer)
     env_fn = lambda: AntEnv(
         reward_fn=ant.multi_dim_reward,
         # render_mode="human",
     )
     ddpg(
         env_fn,
-        run_name="Ant-ddpg-tanh+combined-joints-2",
         run_description="""In this run, we use DDPG with tanh for calculating the velocity reward
         and the combination of all joints for the actuation reward. The reward is a vector of 2 elements,
 	where the first is the velocity reward and second is the actuation reward calculated from the geometric

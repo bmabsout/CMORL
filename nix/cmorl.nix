@@ -16,7 +16,8 @@ buildPythonPackage rec {
     pybullet
     matplotlib
     # (callPackage ./wandb.nix {})
-    (wandb.override {protobuf = depFromTensorflow "protobuf";})
+    # (wandb.override {protobuf = depFromTensorflow "protobuf";})
+    wandb
     # wandb
     gymnasium
     tensorflow
@@ -24,9 +25,9 @@ buildPythonPackage rec {
     keras
     dm-tree
     rich
-    ml-dtypes
     pybox2d
+    # (callPackage ./pybox2d.nix {})
     # (callPackage ./stable-baselines3.nix {})
-    # (callPackage ./mujoco-py.nix {})
+    (callPackage ./mujoco-py.nix {})
   ];
 }

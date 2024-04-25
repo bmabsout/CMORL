@@ -1,6 +1,8 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"; # cuda stuff requires compilation in nixos-unstable
+    # nixpkgs-unfree.url = github:SomeoneSerge/nixpkgs-unfree;
+    # nixpkgs-unfree.inputs.nixpkgs.follows = "nixpkgs";
     nixgl.url = "github:kenranunderscore/nixGL";
     nixgl.inputs.nixpkgs.follows = "nixpkgs";
     flake-compat = {
@@ -17,8 +19,8 @@
         (system: f system (import nixpkgs {
           inherit system;
           overlays=[nixgl.overlay];
-          config.allowUnfree=true;
-          # config.cudaSupport = true;
+          #config.cudaSupport = true;
+          #config.allowUnfree = true;
           # config.cudaCapabilities = [ "8.6" ];
         }));
       
@@ -28,8 +30,9 @@
       devShell = forAllSystems (system: pkgs:
         let python = pkgs.python3.override {
               packageOverrides = (self: super: {
-                # torch = super.torch-bin;
-                # tensorflow = super.tensorflow-bin;
+                # torch = throw "lesh";
+                tensorflow = super.tensorflow-bin;
+                torch = super.torch-bin;
               });
             };
             cmorl = python.pkgs.callPackage ./nix/cmorl.nix {python3Packages = python.pkgs;};

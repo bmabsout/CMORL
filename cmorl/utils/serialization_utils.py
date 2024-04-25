@@ -27,15 +27,15 @@ def hash_it(s: str, length=15):
 def serialize_leaf(o: Any) -> str:
     if type(o) == dict:
         return hash_it(json.dumps(o, sort_keys=True, cls=ExtraTypesEncoder))
-    elif type(o) == str:
-        return hash_it(o, length=7)
     if isinstance(o, Path):
         return hash_it(str(o), length=7)
-    elif type(o) == float:
+    if type(o) == str:
+        return hash_it(o, length=7)
+    if type(o) == float:
         return format(o, ".4g")
-    else:
-        return str(o)
+
+    return str(o)
 
 
 def serialize_dict(args: dict) -> str:
-    return ",".join(f"{k}:{serialize_leaf(v)}" for k, v in sorted(args.items()) if v)
+    return ",".join(f"{k}:{serialize_leaf(v)}" for k, v in sorted(args.items(), key=lambda kv: kv[0]) if v)

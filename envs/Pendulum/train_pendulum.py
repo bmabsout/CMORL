@@ -19,7 +19,7 @@ def parse_args_and_train(args=None):
         steps_per_epoch=1000,
     )
     generated_params = train_utils.create_train_folder_and_params(
-        "Pendulum-custom", hp, cmd_args, serializer
+        "Pendulum_custom", hp, cmd_args, serializer
     )
     env_fn = lambda: PendulumEnv(
         g=10.0, setpoint=0.0, reward_fn=Pendulum.multi_dim_reward
