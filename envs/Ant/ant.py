@@ -483,9 +483,6 @@ class AntEnv(MujocoEnv, utils.EzPickle):
             self.render()
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
 
-        # Save the velocity in the x in a .txt file
-        with open("velocity.txt", "a") as f:
-            f.write(str(x_velocity) + "\n")
         return observation, reward, terminated, False, info
 
     def _get_rew(self, x_velocity: float, action):
