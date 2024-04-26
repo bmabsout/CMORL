@@ -300,7 +300,7 @@ def ddpg(
             backup = tf.stop_gradient(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
-            qc_losses = p_mean(
+            qs_bellman_c = p_mean(
                 1.0 - tf.abs(q - backup),
                 p=p_loss_batch,
                 axis=0,
@@ -310,16 +310,25 @@ def ddpg(
             # tf.print(qc_losses)
             # for i in range(tf.shape(qc_losses)[0]):
             #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
-
-            qc_loss = 1.0 - p_mean(qc_losses, p=p_loss_objective)
+            q_bellman_c = p_mean(qs_bellman_c, p=p_loss_objective)
+            with_reg = p_mean(
+                tf.stack(
+                    [
+                        scale_gradient(tf.squeeze(q_bellman_c), 3e2),
+                        scale_gradient(tf.squeeze(before_sigmoid), 0.1),
+                    ]
+                ),
+                p=0.0,
+            )
+            q_loss = 1.0 - with_reg
 
             # q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
             # q_loss = p_mean(q_loss, p=2)
 
-        grads = tape.gradient(qc_loss, q_network.trainable_variables)
+        grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return qc_loss, qc_losses
+        return q_loss, qs_bellman_c
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
