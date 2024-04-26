@@ -107,6 +107,10 @@ def ddpg(
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
+    p_loss_batch: float = 0.0,
+    p_loss_objective: float = 0.0,
+    p_Q_batch: float = 0.0,
+    p_Q_objective: float = 0.0,
     experiment_description: str = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
@@ -298,7 +302,7 @@ def ddpg(
             )
             qc_losses = p_mean(
                 1.0 - tf.abs(q - backup),
-                p=-4.0,
+                p=p_loss_batch,
                 axis=0,
             )  # -before_tanh_c*1e-5
 
@@ -307,7 +311,7 @@ def ddpg(
             # for i in range(tf.shape(qc_losses)[0]):
             #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
 
-            qc_loss = 1.0 - p_mean(qc_losses, -4.0)
+            qc_loss = 1.0 - p_mean(qc_losses, p=p_loss_objective)
 
             # q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
             # q_loss = p_mean(q_loss, p=2)
@@ -328,7 +332,9 @@ def ddpg(
             )
             #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            qs_c, q_c = env.cmorl.q_composer(q_values)
+            qs_c, q_c = env.cmorl.q_composer(
+                q_values, p_batch=p_Q_batch, p=p_Q_objective
+            )
             all_c = p_mean(
                 tf.stack(
                     [
