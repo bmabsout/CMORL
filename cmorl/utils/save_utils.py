@@ -15,11 +15,12 @@ def save_hypers(experiment_name, hypers, cmd_args, serializer:Arg_Serializer):
     all_hypers = {**vars(cmd_args), **vars(hypers)}
 
     save_path = Path(serializer.get_seed_folder_path(experiment_name, all_hypers), "epochs")
-    common_output_path = Path("trained", experiment_name, serializer.get_semantic_folder_name(all_hypers))
+    semantic_name = serializer.get_semantic_folder_name(all_hypers)
+    common_output_path = Path("trained", experiment_name, semantic_name)
     os.makedirs(common_output_path, exist_ok=True)
     with open(f"{common_output_path}/hypers.json", "w") as f:
         json.dump(serializer.remove_ignored(all_hypers), f, indent=4, cls=ExtraTypesEncoder)
-    return save_path
+    return save_path, semantic_name
 
 
 def latest_subdir(path='.'):

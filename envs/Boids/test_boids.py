@@ -1,5 +1,5 @@
 import numpy as np
-from Pendulum import PendulumEnv
+from Boids import BoidsEnv
 import argparse
 from cmorl.utils import test_utils
 
@@ -25,9 +25,9 @@ def parse_args(args=None):
 
 if __name__ == "__main__":
     # import matplotlib.pyplot as plt
-    cmd_args = parse_args()
-    cmd_args.steps = 100
+    cmd_args = parse_args() 
+    cmd_args.steps = 400
     runs = test_utils.run_tests(
-        PendulumEnv(render_mode="human" if cmd_args.render else None), cmd_args
+        BoidsEnv(render_mode="human" if cmd_args.render else None), cmd_args
     )
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")

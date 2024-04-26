@@ -58,21 +58,21 @@ class ReplayBuffer:
 class HyperParams:
     def __init__(
         self,
-        ac_kwargs={"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
-        seed=int(time.time() * 1e5) % int(1e6),
-        steps_per_epoch=5000,
-        epochs=100,
-        replay_size=int(1e6),
-        gamma=0.9,
-        polyak=0.995,
-        pi_lr=1e-4,
-        q_lr=1e-4,
-        batch_size=100,
-        start_steps=10000,
-        act_noise=0.1,
-        max_ep_len=1000,
-        train_every=50,
-        train_steps=30,
+        ac_kwargs = {"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
+        seed           :int   = int(time.time() * 1e5) % int(1e6),
+        steps_per_epoch:int   = 5000,
+        epochs         :int   = 100,
+        replay_size    :int   = int(1e6),
+        gamma          :float = 0.9,
+        polyak         :float = 0.995,
+        pi_lr          :float = 1e-4,
+        q_lr           :float = 1e-4,
+        batch_size     :int   = 100,
+        start_steps    :int   = 10000,
+        act_noise      :float = 0.1,
+        max_ep_len     :int   = 1000,
+        train_every    :int   = 50,
+        train_steps    :int   = 30,
     ):
         self.ac_kwargs = ac_kwargs
         self.seed = seed
@@ -100,12 +100,13 @@ Deep Deterministic Policy Gradient (DDPG)
 
 def ddpg(
     env_fn: Callable[[], gym.Env],
+    env_name: str = None,
+    experiment_name: str = str(time.time()),
     hp: HyperParams = HyperParams(),
     actor_critic=core.mlp_actor_critic,
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
-    run_name: str = None,
     run_description: str = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
@@ -188,13 +189,12 @@ def ddpg(
 
     weights_and_biases = wandb.init(
         # set the wandb project where this run will be logged
-        project=type(env).__name__,
+        project=env_name,
         # track hyperparameters and run metadata
+        entity="cmorl",
         config=hp.__dict__,
         # name the run
-        name=(
-            run_name if run_name is not None else f"{type(env).__name__}-{time.time()}"
-        ),
+        name=experiment_name,
         # write a description of the run
         notes=run_description,
     )
@@ -348,8 +348,8 @@ def ddpg(
         return all_c, qs_c, q_c, before_tanh_c
 
     def get_action(o, noise_scale):
-        minus_1_to_1 = pi_network(tf.constant(o.reshape(1, -1))).numpy()[0]
-        noise = noise_scale * np.random.randn(act_dim)
+        minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
+        noise = noise_scale * np.random.randn(act_dim).astype(np.float32)
         a = (minus_1_to_1 + noise) * (
             env.action_space.high - env.action_space.low
         ) / 2.0 + (env.action_space.high + env.action_space.low) / 2.0
