@@ -4,7 +4,7 @@ from Pendulum import PendulumEnv
 import Pendulum
 
 
-def parse_args_and_train(args=None, p_values_list=None):
+def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
@@ -16,26 +16,30 @@ def parse_args_and_train(args=None, p_values_list=None):
         pi_lr=cmd_args.learning_rate,
         seed=cmd_args.seed,
         max_ep_len=200,
-        steps_per_epoch=200,
+        steps_per_epoch=1000,
+        p_loss_batch=p_values_list[0],
+        p_loss_objectives=p_values_list[1],
+        p_Q_batch=p_values_list[2],
+        p_Q_objectives=p_values_list[3],
     )
     generated_params = train_utils.create_train_folder_and_params(
-        "Pendulum_custom", hp, cmd_args, serializer
+        "Pendulum-custom", hp, cmd_args, serializer
     )
     env_fn = lambda: PendulumEnv(
         g=10.0, setpoint=0.0, reward_fn=Pendulum.multi_dim_reward
     )
     ddpg(
         env_fn,
-        run_description="Testing the variance with resect to p-value when composing Q-values.",
+        experiment_description="Testing the variance with resect to p-value when composing Q-values.",
         **generated_params
     )
 
 
 if __name__ == "__main__":
-    import itertools
-
-    p_values = range(-50, 51, 5)
-    # train every possible p-value combination of 4 values from p_values
-    p_values_list = list(itertools.product(p_values, repeat=4))
-    for p_values in p_values_list:
-        parse_args_and_train(p_values_list=p_values)
+    # import itertools
+    p_values = [0, -4, 0, -4]
+    # p_values = range(-50, 51, 5)
+    # # train every possible p-value combination of 4 values from p_values
+    # p_values_list = list(itertools.product(p_values, repeat=4))
+    # for p_values in p_values_list:
+    parse_args_and_train(p_values_list=p_values)

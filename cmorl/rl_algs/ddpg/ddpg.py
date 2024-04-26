@@ -57,21 +57,25 @@ class ReplayBuffer:
 class HyperParams:
     def __init__(
         self,
-        ac_kwargs = {"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
-        seed           :int   = int(time.time() * 1e5) % int(1e6),
-        steps_per_epoch:int   = 5000,
-        epochs         :int   = 100,
-        replay_size    :int   = int(1e6),
-        gamma          :float = 0.9,
-        polyak         :float = 0.995,
-        pi_lr          :float = 1e-4,
-        q_lr           :float = 1e-4,
-        batch_size     :int   = 100,
-        start_steps    :int   = 10000,
-        act_noise      :float = 0.1,
-        max_ep_len     :int   = 1000,
-        train_every    :int   = 50,
-        train_steps    :int   = 30,
+        ac_kwargs={"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
+        seed: int = int(time.time() * 1e5) % int(1e6),
+        steps_per_epoch: int = 5000,
+        epochs: int = 100,
+        replay_size: int = int(1e6),
+        gamma: float = 0.9,
+        polyak: float = 0.995,
+        pi_lr: float = 1e-4,
+        q_lr: float = 1e-4,
+        batch_size: int = 100,
+        start_steps: int = 10000,
+        act_noise: float = 0.1,
+        max_ep_len: int = 1000,
+        train_every: int = 50,
+        train_steps: int = 30,
+        p_loss_batch: float = 0.0,
+        p_loss_objectives: float = 0.0,
+        p_Q_batch: float = 0.0,
+        p_Q_objectives: float = 0.0,
     ):
         self.ac_kwargs = ac_kwargs
         self.seed = seed
@@ -88,6 +92,10 @@ class HyperParams:
         self.max_ep_len = max_ep_len
         self.train_every = train_every
         self.train_steps = train_steps
+        self.p_loss_batch = p_loss_batch
+        self.p_loss_objectives = p_loss_objectives
+        self.p_Q_batch = p_Q_batch
+        self.p_Q_objectives = p_Q_objectives
 
 
 """
@@ -106,7 +114,7 @@ def ddpg(
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
-    run_description: str = None,
+    experiment_description: str = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
     """
@@ -195,14 +203,15 @@ def ddpg(
         # name the run
         name=experiment_name,
         # write a description of the run
-        notes=run_description,
+        notes=experiment_description,
     )
+
     def exited_gracefully():
         weights_and_biases.finish()
         exit(0)
 
-    signal.signal(signal.SIGINT,exited_gracefully)
-    signal.signal(signal.SIGTERM,exited_gracefully)
+    signal.signal(signal.SIGINT, exited_gracefully)
+    signal.signal(signal.SIGTERM, exited_gracefully)
     assert isinstance(
         env.action_space, gym.spaces.Box
     ), "only continuous action space is supported"
@@ -302,7 +311,7 @@ def ddpg(
             )
             qs_bellman_c = p_mean(
                 1.0 - tf.abs(q - backup),
-                p=-4.0,
+                p=hp.p_loss_batch,
                 axis=0,
             )  # -before_clip_c*1e-5
 
@@ -310,8 +319,10 @@ def ddpg(
             # tf.print(qc_losses)
             # for i in range(tf.shape(qc_losses)[0]):
             #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
-            keep_in_range = p_mean(move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0)
-            q_bellman_c = p_mean(qs_bellman_c, -4.0)
+            keep_in_range = p_mean(
+                move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
+            )
+            q_bellman_c = p_mean(qs_bellman_c, p=hp.p_loss_objectives)
             with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
             # tf.print(q_bellman_c)
             # tf.print(with_reg)
@@ -334,7 +345,9 @@ def ddpg(
             before_clip = outputs["before_clip"]
             before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-1.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            qs_c, q_c = env.cmorl.q_composer(q_values)
+            qs_c, q_c = env.cmorl.q_composer(
+                q_values, p_batch=hp.p_Q_batch, p_objectives=hp.p_Q_objectives
+            )
             all_c = p_mean([q_c, before_clip_c], p=0.0)
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
