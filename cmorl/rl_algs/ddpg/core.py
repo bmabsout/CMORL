@@ -3,6 +3,7 @@ from keras import Model
 from keras.layers import Dense, Input, Rescaling, Activation
 from gymnasium import spaces
 import keras
+import tensorflow as tf
 
 def mlp_functional(
     inputs,
@@ -86,9 +87,9 @@ def critic(
     )
 
     # name the layer before sigmoid
-    before_sigmoid = RescalingFixed(0.1, offset=-0.5, name="before_sigmoid")(outputs)
+    before_clip = RescalingFixed(1.0, offset=0.3, name="before_clip")(outputs)
 
-    biased_normed = Activation("sigmoid")(before_sigmoid)
+    biased_normed = Activation(lambda x: tf.clip_by_value(x, 1e-15, 1.0-1e-15))(before_clip)
     model = keras.Model(inputs, biased_normed)
     model.compile()
     return model

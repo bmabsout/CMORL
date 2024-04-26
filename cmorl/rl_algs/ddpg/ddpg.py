@@ -10,15 +10,16 @@ import numpy as np
 import tensorflow as tf
 import gymnasium as gym
 import keras
+import signal
 import wandb
 from cmorl.rl_algs.ddpg import core
 from cmorl.utils.logx import TensorflowLogger
 from cmorl.utils.loss_composition import (
     geo,
+    move_towards_range,
     p_mean,
     scale_gradient,
     move_toward_zero,
-    sigmoid_regularizer,
 )
 
 
@@ -203,6 +204,12 @@ def ddpg(
         notes=experiment_description,
     )
 
+    def exited_gracefully():
+        weights_and_biases.finish()
+        exit(0)
+
+    signal.signal(signal.SIGINT, exited_gracefully)
+    signal.signal(signal.SIGTERM, exited_gracefully)
     assert isinstance(
         env.action_space, gym.spaces.Box
     ), "only continuous action space is supported"
@@ -225,13 +232,13 @@ def ddpg(
             {"pi": pi_network.output, "before_tanh": pi_network.layers[-2].output},
         )
         pi_and_before_tanh.compile()
-        # q_and_before_sigmoid = keras.Model(
-        #     q_network.input, {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output})
-        q_and_before_sigmoid = keras.Model(
+        # q_and_before_clip = keras.Model(
+        #     q_network.input, {"q": q_network.output, "before_clip": q_network.layers[-2].output})
+        q_and_before_clip = keras.Model(
             q_network.input,
-            {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output},
+            {"q": q_network.output, "before_clip": q_network.layers[-2].output},
         )
-        q_and_before_sigmoid.compile()
+        q_and_before_clip.compile()
     # Target networks
     with tf.name_scope("target"):
         # Note that the action placeholder going to actor_critic here is
@@ -268,11 +275,11 @@ def ddpg(
     def q_update(obs1, obs2, acts, rews, dones):
         with tf.GradientTape() as tape:
             # q_squeezed = tf.squeeze(q, axis=1)
-            outputs = q_and_before_sigmoid(tf.concat([obs1, acts], axis=-1))
+            outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
             q = outputs["q"]
-            before_sigmoid = outputs["before_sigmoid"]
 
-            before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid))
+            # tf.print(before_clip)
+            # tf.print(outputs["before_clip"])
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
 
@@ -310,19 +317,17 @@ def ddpg(
             # tf.print(qc_losses)
             # for i in range(tf.shape(qc_losses)[0]):
             #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
-            q_bellman_c = p_mean(qs_bellman_c, p=p_loss_objective)
-            with_reg = p_mean(
-                tf.stack(
-                    [
-                        scale_gradient(tf.squeeze(q_bellman_c), 3e2),
-                        scale_gradient(tf.squeeze(before_sigmoid), 0.1),
-                    ]
-                ),
-                p=0.0,
+            keep_in_range = p_mean(
+                move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
+            q_bellman_c = p_mean(qs_bellman_c, p_loss_objective)
+            with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
+            # tf.print(q_bellman_c)
+            # tf.print(with_reg)
+            # tf.print(before_clip)
             q_loss = 1.0 - with_reg
 
-            # q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
+            # q_loss = tf.reduce_mean((q - backup) ** 2) + before_clip
             # q_loss = p_mean(q_loss, p=2)
 
         grads = tape.gradient(q_loss, q_network.trainable_variables)
