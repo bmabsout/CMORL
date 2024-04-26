@@ -344,7 +344,7 @@ class AntEnv(MujocoEnv, utils.EzPickle):
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         include_cfrc_ext_in_observation: bool = True,
-        reward_fn: RewardFnType = multi_dim_reward,
+        reward_fn: RewardFnType = multi_dim_reward_joints,
         **kwargs,
     ):
         utils.EzPickle.__init__(
