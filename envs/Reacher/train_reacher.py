@@ -1,8 +1,3 @@
-import argparse
-import json
-import os
-import time
-import pickle
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
 from cmorl.utils import args_utils
 from cmorl.utils import train_utils
@@ -25,7 +20,7 @@ reacher_serializer = lambda: args_utils.Arg_Serializer.join(
             ),
         }
     ),
-    args_utils.default_serializer(experiment_name="Reacher", epochs=50),
+    args_utils.default_serializer(epochs=50),
 )
 
 

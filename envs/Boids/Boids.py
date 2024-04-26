@@ -11,7 +11,6 @@ from cmorl.utils.loss_composition import p_mean
 from cmorl.utils.reward_utils import CMORL, RewardFnType
 from toroid_utils import toroidal_distance, toroidal_pairwise_dist
 
-
 @tf.function
 def flatten_upper_triangle(matrix):
     """
@@ -23,18 +22,6 @@ def flatten_upper_triangle(matrix):
     """
     upper_triangle = tf.where(tf.linalg.band_part(tf.ones_like(matrix), -1, 0) == 0.0, True, False)
     return tf.boolean_mask(matrix, upper_triangle)
-
-def multi_dim_reward(flat_state, flat_u, env: "BoidsEnv"):
-    state = convert_state_to_dict(flat_state, env.numBoids)
-    action = convert_action_to_dict(flat_u, env.numBoids)
-    go_fast = tf.norm(state["vel"], axis=0)/env.max_speed
-    max_toroidal_distance = (0.5**2.0 + 0.5**2.0)**0.5 # toroidal distance means at worst we are (0.5, 0.5) away
-    dists = flatten_upper_triangle(toroidal_pairwise_dist(state["pos"], state["pos"]))/ max_toroidal_distance
-    minimize_distance = 1.0 - dists
-    avoid_collisions = tf.where(dists < 0.025, dists/0.025, 1.0)
-    small_actions = 1.0 - tf.abs(action["angle_change"])/convert_action_to_dict(env.action_space.high, env.numBoids)["angle_change"]
-    return np.concatenate([go_fast, minimize_distance, avoid_collisions, small_actions])
-
 
 def composed_reward_fn(flat_state, flat_u, env: "BoidsEnv"):
     return 0.0
@@ -49,35 +36,16 @@ def convert_action_to_dict(flat_u: tf.Tensor, numBoids: int):
     u = tf.transpose(tf.reshape(flat_u, (numBoids, 2)))
     return {"setpoint_vel_mag": u[0], "angle_change": u[1]}
 
-
-@tf.function
-def q_composer(q_values):
-    qs_c = p_mean(q_values, p=0.0, axis=0)
-    q_c = p_mean(qs_c, p=-4.0)
-    return qs_c, q_c
-
-
-@tf.function
-def difference_eq(flat_state: tf.Tensor, flat_u: tf.Tensor, numBoids: int, dt: float, max_speed: float):
-    # state is a tensor of shape (4*numBoids)
-    # u is a tensor of shape (2*numBoids)
-    state = convert_state_to_dict(flat_state, numBoids)
-    action = convert_action_to_dict(flat_u, numBoids)
-    # get angle of vel
-    curr_angle = tf.atan2(state["vel"][1], state["vel"][0])
-    new_angle = curr_angle + action["angle_change"]*dt
-    new_anglexy = tf.stack([tf.cos(new_angle), tf.sin(new_angle)], axis=0)
-    # using leapfrog integration
-    vel_mag = tf.norm(state["vel"], axis=0)
-    new_vel_mag = vel_mag*(1.0 - dt) + action["setpoint_vel_mag"]*dt
-    new_vel = new_anglexy*new_vel_mag
-    # new_vel = vel*(1.0 - dt) + (setpoint_vel - vel)*dt
-    # clamp velocity
-    new_vel = tf.clip_by_norm(new_vel, max_speed, axes=[0])
-    new_pos = state["pos"] + new_vel*dt
-    # let the position wrap ala torus
-    new_pos = tf.math.floormod(new_pos, 1.0)
-    return tf.reshape(tf.transpose(tf.concat([new_pos, new_vel], axis=0)), [-1])
+def multi_dim_reward(flat_state, flat_u, env: "BoidsEnv"):
+    state = convert_state_to_dict(flat_state, env.numBoids)
+    action = convert_action_to_dict(flat_u, env.numBoids)
+    go_fast = tf.norm(state["vel"], axis=0)/env.max_speed
+    max_toroidal_distance = (0.5**2.0 + 0.5**2.0)**0.5 # toroidal distance means at worst we are (0.5, 0.5) away
+    dists = flatten_upper_triangle(toroidal_pairwise_dist(state["pos"], state["pos"]))/ max_toroidal_distance
+    minimize_distance = 1.0 - tf.where(dists > 0.7, 0.0, (0.7-dists)/0.7)
+    avoid_collisions = tf.where(dists < 0.025, dists/0.025, 1.0)
+    small_actions = 1.0 - tf.abs(action["angle_change"])/convert_action_to_dict(env.action_space.high, env.numBoids)["angle_change"]
+    return np.concatenate([go_fast, minimize_distance, avoid_collisions, small_actions])
 
 class BoidsEnv(gym.Env):
 
@@ -138,12 +106,6 @@ class BoidsEnv(gym.Env):
         obs_low = np.tile(np.concatenate([min_pos, -max_vel]), numBoids)
         obs_high = np.tile(np.concatenate([max_pos, max_vel]), numBoids)
         self.observation_space = spaces.Box(
-            low=obs_low,
-            high=obs_high,
-            dtype=np.float32
-        )
-
-        self.relative_observation_space = spaces.Box(
             low=obs_low,
             high=obs_high,
             dtype=np.float32
@@ -224,6 +186,7 @@ class BoidsEnv(gym.Env):
         
     def drawBoids(self):
         import pygame
+        import pygame.gfxdraw
         self.surf = pygame.Surface((self.screen_dim, self.screen_dim))
         self.surf.fill((255, 255, 255))
         screen_state = convert_state_to_dict(tf.cast(self.state*self.screen_dim, tf.int32), self.numBoids)
@@ -243,6 +206,37 @@ class BoidsEnv(gym.Env):
             pygame.quit()
             self.isopen = False
 
+
+
+
+@tf.function
+def q_composer(q_values):
+    qs_c = p_mean(q_values, p=0.0, axis=0)
+    q_c = p_mean(qs_c, p=-4.0)
+    return qs_c, q_c
+
+
+@tf.function
+def difference_eq(flat_state: tf.Tensor, flat_u: tf.Tensor, numBoids: int, dt: float, max_speed: float):
+    # state is a tensor of shape (4*numBoids)
+    # u is a tensor of shape (2*numBoids)
+    state = convert_state_to_dict(flat_state, numBoids)
+    action = convert_action_to_dict(flat_u, numBoids)
+    # get angle of vel
+    curr_angle = tf.atan2(state["vel"][1], state["vel"][0])
+    new_angle = curr_angle + action["angle_change"]*dt
+    new_anglexy = tf.stack([tf.cos(new_angle), tf.sin(new_angle)], axis=0)
+    # using leapfrog integration
+    vel_mag = tf.norm(state["vel"], axis=0)
+    new_vel_mag = vel_mag*(1.0 - dt) + action["setpoint_vel_mag"]*dt
+    new_vel = new_anglexy*new_vel_mag
+    # new_vel = vel*(1.0 - dt) + (setpoint_vel - vel)*dt
+    # clamp velocity
+    new_vel = tf.clip_by_norm(new_vel, max_speed, axes=[0])
+    new_pos = state["pos"] + new_vel*dt
+    # let the position wrap ala torus
+    new_pos = tf.math.floormod(new_pos, 1.0)
+    return tf.reshape(tf.transpose(tf.concat([new_pos, new_vel], axis=0)), [-1])
 
 if __name__ == "__main__":
     env = BoidsEnv(numBoids=2, render_mode="human")

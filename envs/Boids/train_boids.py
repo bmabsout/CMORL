@@ -1,15 +1,27 @@
-from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
-from cmorl.utils import args_utils
-from Boids import BoidsEnv
-import Boids
+import cmorl.utils.args_utils as args_utils
 
+boids_serializer = lambda: args_utils.Arg_Serializer.join(
+    args_utils.Arg_Serializer(
+        abbrev_to_args={
+            "numboids": args_utils.Serialized_Argument(
+                name="--numboids",
+                type=int,
+                default=5,
+                help="number of boids",
+            ),
+        }
+    ),
+    args_utils.default_serializer(epochs=200),
+)
 
 def parse_args_and_train(args=None):
-    import cmorl.utils.train_utils as train_utils
-    import cmorl.utils.args_utils as args_utils
-
-    serializer = args_utils.default_serializer(epochs=200, learning_rate=1e-3)
+    serializer = boids_serializer()
     cmd_args = args_utils.parse_arguments(serializer)
+
+    import cmorl.utils.train_utils as train_utils
+    from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
+    import Boids
+
     hp = HyperParams(
         ac_kwargs={"actor_hidden_sizes": (256, 256), "critic_hidden_sizes": (512, 512)},
         epochs=cmd_args.epochs,
@@ -23,14 +35,15 @@ def parse_args_and_train(args=None):
     generated_params = train_utils.create_train_folder_and_params(
         "Boids-custom", hp, cmd_args, serializer
     )
-    env_fn = lambda: BoidsEnv(
-        reward_fn=Boids.multi_dim_reward
+    env_fn = lambda: Boids.BoidsEnv(
+        reward_fn=Boids.multi_dim_reward,
+        numBoids=cmd_args.numboids,
     )
     ddpg(
         env_fn,
         **generated_params
     )
 
-
 if __name__ == "__main__":
     parse_args_and_train()
+    

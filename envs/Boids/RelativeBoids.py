@@ -7,7 +7,12 @@ import gymnasium as gym
 class RelativeBoids(gym.Env):
     def __init__(self):
         self.env = Boids.BoidsEnv()
-        self.observation_space = self.env.observation_space
+        self.observation_space = spaces.Box(
+            low=obs_low,
+            high=obs_high,
+            dtype=np.float32
+        )
+
         self.action_space = self.env.action_space
 
     def relative_obs(self):
