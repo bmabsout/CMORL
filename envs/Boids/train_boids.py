@@ -21,6 +21,12 @@ def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
     from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
     import Boids
+    # import tensorflow as tf
+    # tf.debugging.experimental.enable_dump_debug_info(
+    #     "./chu7",
+    #     tensor_debug_mode="FULL_HEALTH",
+    #     circular_buffer_size=-1
+    # )
 
     hp = HyperParams(
         ac_kwargs={"actor_hidden_sizes": (256, 256), "critic_hidden_sizes": (512, 512)},

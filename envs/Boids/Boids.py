@@ -42,7 +42,7 @@ def multi_dim_reward(flat_state, flat_u, env: "BoidsEnv"):
     go_fast = tf.norm(state["vel"], axis=0)/env.max_speed
     max_toroidal_distance = (0.5**2.0 + 0.5**2.0)**0.5 # toroidal distance means at worst we are (0.5, 0.5) away
     dists = flatten_upper_triangle(toroidal_pairwise_dist(state["pos"], state["pos"]))/ max_toroidal_distance
-    minimize_distance = 1.0 - tf.where(dists > 0.7, 0.0, (0.7-dists)/0.7)
+    minimize_distance = 1.0 - dists # tf.where(dists > 0.7, 0.0, (0.7-dists)/0.7)
     avoid_collisions = tf.where(dists < 0.025, dists/0.025, 1.0)
     small_actions = 1.0 - tf.abs(action["angle_change"])/convert_action_to_dict(env.action_space.high, env.numBoids)["angle_change"]
     return np.concatenate([go_fast, minimize_distance, avoid_collisions, small_actions])
