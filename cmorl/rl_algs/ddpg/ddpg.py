@@ -4,8 +4,7 @@
 # This script needs these libraries to be installed:
 #   tensorflow, numpy
 import time
-from dataclasses import asdict, dataclass
-from typing import Any, Callable, Dict
+from typing import Callable
 import numpy as np
 import tensorflow as tf
 import gymnasium as gym
@@ -19,7 +18,6 @@ from cmorl.utils.loss_composition import (
     move_towards_range,
     p_mean,
     scale_gradient,
-    move_toward_zero,
 )
 
 
@@ -222,11 +220,11 @@ def ddpg(
             env.observation_space, env.action_space, rew_dims, **hp.ac_kwargs
         )
 
-        pi_and_before_tanh = keras.Model(
+        pi_and_before_clip = keras.Model(
             pi_network.input,
-            {"pi": pi_network.output, "before_tanh": pi_network.layers[-2].output},
+            {"pi": pi_network.output, "before_clip": pi_network.layers[-2].output},
         )
-        pi_and_before_tanh.compile()
+        pi_and_before_clip.compile()
         # q_and_before_clip = keras.Model(
         #     q_network.input, {"q": q_network.output, "before_clip": q_network.layers[-2].output})
         q_and_before_clip = keras.Model(
@@ -306,7 +304,7 @@ def ddpg(
                 1.0 - tf.abs(q - backup),
                 p=-4.0,
                 axis=0,
-            )  # -before_tanh_c*1e-5
+            )  # -before_clip_c*1e-5
 
             # q_loss_dic = {}
             # tf.print(qc_losses)
@@ -331,32 +329,20 @@ def ddpg(
     @tf.function
     def pi_update(obs1, obs2, debug=False):
         with tf.GradientTape() as tape:
-            outputs = pi_and_before_tanh(obs1)
+            outputs = pi_and_before_clip(obs1)
             pi = outputs["pi"]
-            before_tanh = outputs["before_tanh"]
-            before_tanh_c = 1.0 - tf.reduce_mean(
-                tf.reshape(1.0 - move_toward_zero(before_tanh), [1, -1]) ** 2.0
-            )
-            #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
+            before_clip = outputs["before_clip"]
+            before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-1.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
             qs_c, q_c = env.cmorl.q_composer(q_values)
-            all_c = p_mean(
-                tf.stack(
-                    [
-                        scale_gradient(tf.squeeze(q_c), 3e2),
-                        scale_gradient(tf.squeeze(before_tanh_c), 0.1),
-                    ]
-                ),
-                p=0.0,
-            )
-            # print(qs_c.shape, q_c.shape, all_c.shape)
+            all_c = p_mean([q_c, before_clip_c], p=0.0)
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if debug:
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
         grads_and_vars = zip(grads, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
-        return all_c, qs_c, q_c, before_tanh_c
+        return all_c, qs_c, q_c, before_clip_c
 
     def get_action(o, noise_scale):
         minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
@@ -401,7 +387,7 @@ def ddpg(
 
         if np.isnan(a).any():
             # a = env.action_space.sample()
-            print("nan detected")
+            print(f"nan detected in action {a}")
             exit(1)
 
         # Step the env
@@ -445,17 +431,17 @@ def ddpg(
                     all_c,
                     qs_c,
                     q_c,
-                    before_tanh_c,
+                    before_clip_c,
                 ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
 
                 qs_c = qs_c.numpy()
                 logger.store(
                     # All=all_c,
                     Q_comp=q_c,
-                    Before_tanh=before_tanh_c,
+                    before_clip=before_clip_c,
                 )
                 weights_and_biases.log(
-                    {"Q-composed": q_c, "Before_tanh": before_tanh_c}
+                    {"Q-composed": q_c, "before_clip": before_clip_c}
                 )
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
@@ -500,7 +486,7 @@ def ddpg(
                 logger.log_tabular(f"EpRet_{i}", average_only=True)
             logger.log_tabular("Time", time.time() - start_time)
             logger.log_tabular("TotalEnvInteracts", t)
-            # logger.log_tabular("Before_tanh", average_only=True)
+            # logger.log_tabular("before_clip", average_only=True)
             # logger.log_tabular("Qs", average_only=True)
             for i in range(rew_dims):
                 logger.log_tabular(f"Q{i}", average_only=True)
