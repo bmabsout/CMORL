@@ -11,7 +11,7 @@ boids_serializer = lambda: args_utils.Arg_Serializer.join(
             ),
         }
     ),
-    args_utils.default_serializer(epochs=200),
+    args_utils.default_serializer(epochs=200, learning_rate=1e-2),
 )
 
 def parse_args_and_train(args=None):
