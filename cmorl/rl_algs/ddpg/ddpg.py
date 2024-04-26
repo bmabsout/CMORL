@@ -57,25 +57,25 @@ class ReplayBuffer:
 class HyperParams:
     def __init__(
         self,
-        ac_kwargs = {"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
-        seed             :int   = int(time.time() * 1e5) % int(1e6),
-        steps_per_epoch  :int   = 5000,
-        epochs           :int   = 100,
-        replay_size      :int   = int(1e6),
-        gamma            :float = 0.9,
-        polyak           :float = 0.995,
-        pi_lr            :float = 1e-2,
-        q_lr             :float = 1e-2,
-        batch_size       :int   = 100,
-        start_steps      :int   = 10000,
-        act_noise        :float = 0.1,
-        max_ep_len       :int   = 1000,
-        train_every      :int   = 50,
-        train_steps      :int   = 30,
-        p_loss_batch     :float = 0.0,
-        p_loss_objectives:float = 0.0,
-        p_Q_batch        :float = 0.0,
-        p_Q_objectives   :float = 0.0,
+        ac_kwargs={"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
+        seed: int = int(time.time() * 1e5) % int(1e6),
+        steps_per_epoch: int = 5000,
+        epochs: int = 100,
+        replay_size: int = int(1e6),
+        gamma: float = 0.9,
+        polyak: float = 0.995,
+        pi_lr: float = 1e-2,
+        q_lr: float = 1e-2,
+        batch_size: int = 100,
+        start_steps: int = 10000,
+        act_noise: float = 0.1,
+        max_ep_len: int = 1000,
+        train_every: int = 50,
+        train_steps: int = 30,
+        p_loss_batch: float = 0.0,
+        p_loss_objectives: float = 0.0,
+        p_Q_batch: float = 0.0,
+        p_Q_objectives: float = 0.0,
     ):
         self.ac_kwargs = ac_kwargs
         self.seed = seed
@@ -205,6 +205,7 @@ def ddpg(
         # write a description of the run
         notes=experiment_description,
     )
+
     def exited_gracefully(*args, **kwargs):
         weights_and_biases.finish()
         exit(0)

@@ -16,7 +16,7 @@ def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
         pi_lr=cmd_args.learning_rate,
         seed=cmd_args.seed,
         max_ep_len=200,
-        steps_per_epoch=1000,
+        steps_per_epoch=200,
         p_loss_batch=p_values_list[0],
         p_loss_objectives=p_values_list[1],
         p_Q_batch=p_values_list[2],
@@ -36,10 +36,10 @@ def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
 
 
 if __name__ == "__main__":
-    # import itertools
-    p_values = [0, -4, 0, -4]
-    # p_values = range(-50, 51, 5)
-    # # train every possible p-value combination of 4 values from p_values
-    # p_values_list = list(itertools.product(p_values, repeat=4))
-    # for p_values in p_values_list:
-    parse_args_and_train(p_values_list=p_values)
+    import itertools
+
+    p_values = range(-50, 51, 2)
+    # train every possible p-value combination of 4 values from p_values
+    p_values_list = list(itertools.product(p_values, repeat=4))
+    for p_values in p_values_list:
+        parse_args_and_train(p_values_list=p_values)
