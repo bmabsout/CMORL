@@ -58,21 +58,21 @@ class ReplayBuffer:
 class HyperParams:
     def __init__(
         self,
-        ac_kwargs = {"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
-        seed           :int   = int(time.time() * 1e5) % int(1e6),
-        steps_per_epoch:int   = 5000,
-        epochs         :int   = 100,
-        replay_size    :int   = int(1e6),
-        gamma          :float = 0.9,
-        polyak         :float = 0.995,
-        pi_lr          :float = 1e-4,
-        q_lr           :float = 1e-4,
-        batch_size     :int   = 100,
-        start_steps    :int   = 10000,
-        act_noise      :float = 0.1,
-        max_ep_len     :int   = 1000,
-        train_every    :int   = 50,
-        train_steps    :int   = 30,
+        ac_kwargs={"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
+        seed: int = int(time.time() * 1e5) % int(1e6),
+        steps_per_epoch: int = 5000,
+        epochs: int = 100,
+        replay_size: int = int(1e6),
+        gamma: float = 0.9,
+        polyak: float = 0.995,
+        pi_lr: float = 1e-4,
+        q_lr: float = 1e-4,
+        batch_size: int = 100,
+        start_steps: int = 10000,
+        act_noise: float = 0.1,
+        max_ep_len: int = 1000,
+        train_every: int = 50,
+        train_steps: int = 30,
     ):
         self.ac_kwargs = ac_kwargs
         self.seed = seed
@@ -107,7 +107,7 @@ def ddpg(
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
-    run_description: str = None,
+    experiment_description: str = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
     """
@@ -196,7 +196,7 @@ def ddpg(
         # name the run
         name=experiment_name,
         # write a description of the run
-        notes=run_description,
+        notes=experiment_description,
     )
 
     assert isinstance(

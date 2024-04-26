@@ -8,7 +8,7 @@ def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=20, learning_rate=1e-4)
+    serializer = args_utils.default_serializer(epochs=10, learning_rate=1e-4)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams(
         epochs=cmd_args.epochs,
@@ -16,7 +16,7 @@ def parse_args_and_train(args=None):
         pi_lr=cmd_args.learning_rate,
         seed=cmd_args.seed,
         max_ep_len=200,
-        steps_per_epoch=1000,
+        steps_per_epoch=200,
     )
     generated_params = train_utils.create_train_folder_and_params(
         "Pendulum_custom", hp, cmd_args, serializer
@@ -26,8 +26,7 @@ def parse_args_and_train(args=None):
     )
     ddpg(
         env_fn,
-        # run_name="Pendulum-ddpg",
-        # run_description="Testing the modification of weights and biases.",
+        run_description="Testing the variance with resect to p-value when composing Q-values.",
         **generated_params
     )
 
