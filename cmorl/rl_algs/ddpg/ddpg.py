@@ -58,21 +58,21 @@ class ReplayBuffer:
 class HyperParams:
     def __init__(
         self,
-        ac_kwargs={"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
-        seed=int(time.time() * 1e5) % int(1e6),
-        steps_per_epoch=5000,
-        epochs=100,
-        replay_size=int(1e6),
-        gamma=0.9,
-        polyak=0.995,
-        pi_lr=1e-4,
-        q_lr=1e-4,
-        batch_size=100,
-        start_steps=10000,
-        act_noise=0.1,
-        max_ep_len=1000,
-        train_every=50,
-        train_steps=30,
+        ac_kwargs = {"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
+        seed           :int   = int(time.time() * 1e5) % int(1e6),
+        steps_per_epoch:int   = 5000,
+        epochs         :int   = 100,
+        replay_size    :int   = int(1e6),
+        gamma          :float = 0.9,
+        polyak         :float = 0.995,
+        pi_lr          :float = 1e-4,
+        q_lr           :float = 1e-4,
+        batch_size     :int   = 100,
+        start_steps    :int   = 10000,
+        act_noise      :float = 0.1,
+        max_ep_len     :int   = 1000,
+        train_every    :int   = 50,
+        train_steps    :int   = 30,
     ):
         self.ac_kwargs = ac_kwargs
         self.seed = seed
@@ -100,12 +100,13 @@ Deep Deterministic Policy Gradient (DDPG)
 
 def ddpg(
     env_fn: Callable[[], gym.Env],
+    env_name: str = None,
+    experiment_name: str = str(time.time()),
     hp: HyperParams = HyperParams(),
     actor_critic=core.mlp_actor_critic,
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
-    run_name: str = None,
     run_description: str = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
@@ -188,14 +189,12 @@ def ddpg(
 
     weights_and_biases = wandb.init(
         # set the wandb project where this run will be logged
-        project=type(env).__name__,
+        project=env_name,
         # track hyperparameters and run metadata
         entity="cmorl",
         config=hp.__dict__,
         # name the run
-        name=(
-            run_name if run_name is not None else f"{type(env).__name__}-{time.time()}"
-        ),
+        name=experiment_name,
         # write a description of the run
         notes=run_description,
     )
@@ -297,7 +296,7 @@ def ddpg(
             backup = tf.stop_gradient(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
-            qc_losses = p_mean(
+            qs_bellman_c = p_mean(
                 1.0 - tf.abs(q - backup),
                 p=-4.0,
                 axis=0,
@@ -307,16 +306,25 @@ def ddpg(
             # tf.print(qc_losses)
             # for i in range(tf.shape(qc_losses)[0]):
             #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
-
-            qc_loss = 1.0 - p_mean(qc_losses, -4.0)
+            q_bellman_c = p_mean(qs_bellman_c, -4.0)
+            with_reg = p_mean(
+                tf.stack(
+                    [
+                        scale_gradient(tf.squeeze(q_bellman_c), 3e2),
+                        scale_gradient(tf.squeeze(before_sigmoid), 0.1),
+                    ]
+                ),
+                p=0.0,
+            )
+            q_loss = 1.0 - with_reg
 
             # q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
             # q_loss = p_mean(q_loss, p=2)
 
-        grads = tape.gradient(qc_loss, q_network.trainable_variables)
+        grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return qc_loss, qc_losses
+        return q_loss, qs_bellman_c
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
@@ -350,7 +358,7 @@ def ddpg(
 
     def get_action(o, noise_scale):
         minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
-        noise = noise_scale * np.random.randn(act_dim)
+        noise = noise_scale * np.random.randn(act_dim).astype(np.float32)
         a = (minus_1_to_1 + noise) * (
             env.action_space.high - env.action_space.low
         ) / 2.0 + (env.action_space.high + env.action_space.low) / 2.0

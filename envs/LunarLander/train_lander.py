@@ -1,8 +1,3 @@
-import argparse
-import json
-import os
-import time
-import pickle
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
 from cmorl.utils import args_utils
 from cmorl.utils import train_utils
@@ -29,7 +24,7 @@ class WithStrPolyDecay(tf.optimizers.schedules.PolynomialDecay):
 
 def train(cmd_args, hp, serializer):
     generated_params = train_utils.create_train_folder_and_params(
-        "lander-custom", hp, cmd_args, serializer
+        "Lander-custom", hp, cmd_args, serializer
     )
     env_fn = lambda: lunar_lander.LunarLander(
         reward_fn=lunar_lander.multi_dim_reward,

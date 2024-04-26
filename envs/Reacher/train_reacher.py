@@ -1,8 +1,3 @@
-import argparse
-import json
-import os
-import time
-import pickle
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
 from cmorl.utils import args_utils
 from cmorl.utils import train_utils
@@ -25,7 +20,7 @@ reacher_serializer = lambda: args_utils.Arg_Serializer.join(
             ),
         }
     ),
-    args_utils.default_serializer(),
+    args_utils.default_serializer(epochs=50),
 )
 
 
@@ -54,7 +49,7 @@ def train(cmd_args, serializer):
         train_steps=30,
     )
     generated_params = train_utils.create_train_folder_and_params(
-        "Reacher-custom", hp, cmd_args, serializer
+        hp, cmd_args, serializer
     )
     env_fn = lambda: reacher.ReacherEnv(
         goal_distance=cmd_args.distance,
@@ -67,5 +62,4 @@ def train(cmd_args, serializer):
 if __name__ == "__main__":
     serializer = reacher_serializer()
     cmd_args = args_utils.parse_arguments(serializer)
-    cmd_args.epochs = 50
     train(cmd_args, serializer)
