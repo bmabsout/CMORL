@@ -38,7 +38,7 @@ def tf_pop(tensor, axis):
 
 
 @tf.function
-def p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None):
+def p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None, dtype=tf.float64):
     """
     The Generalized mean
     l: a tensor of elements we would like to compute the p_mean with respect to, elements must be > 0.0
@@ -47,11 +47,12 @@ def p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None):
     axis: axis or axese to collapse the pmean with respect to, None would collapse all
     https://www.wolframcloud.com/obj/26a59837-536e-4e9e-8ed1-b1f7e6b58377
     """
-    l = tf.convert_to_tensor(l)
+    l = tf.cast(tf.convert_to_tensor(l), dtype)
     p = tf.cast(p, l.dtype)
     slack = tf.cast(slack, l.dtype)
     default_val = tf.cast(default_val, l.dtype)
-    p = tf.where(tf.abs(p) < 1e-3, -1e-3 if p < 0.0 else 1e-3, p)
+    min_val = tf.constant(1e-5, dtype = l.dtype)
+    p = tf.where(tf.abs(p) < min_val, -min_val if p < 0.0 else min_val, p)
 
     return tf.cond(tf.reduce_prod(tf.shape(l)) == 0 # condition if an empty array is fed in
         , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(l), axis)) if axis else default_val
