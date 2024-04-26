@@ -4,7 +4,7 @@ from Pendulum import PendulumEnv
 import Pendulum
 
 
-def parse_args_and_train(args=None):
+def parse_args_and_train(args=None, p_values_list=None):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
@@ -32,4 +32,10 @@ def parse_args_and_train(args=None):
 
 
 if __name__ == "__main__":
-    parse_args_and_train()
+    import itertools
+
+    p_values = range(-50, 51, 5)
+    # train every possible p-value combination of 4 values from p_values
+    p_values_list = list(itertools.product(p_values, repeat=4))
+    for p_values in p_values_list:
+        parse_args_and_train(p_values_list=p_values)
