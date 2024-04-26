@@ -4,21 +4,20 @@
 # This script needs these libraries to be installed:
 #   tensorflow, numpy
 import time
-from dataclasses import asdict, dataclass
-from typing import Any, Callable, Dict
+from typing import Callable
 import numpy as np
 import tensorflow as tf
 import gymnasium as gym
 import keras
+import signal
 import wandb
 from cmorl.rl_algs.ddpg import core
 from cmorl.utils.logx import TensorflowLogger
 from cmorl.utils.loss_composition import (
     geo,
+    move_towards_range,
     p_mean,
     scale_gradient,
-    move_toward_zero,
-    sigmoid_regularizer,
 )
 
 
@@ -59,20 +58,24 @@ class HyperParams:
     def __init__(
         self,
         ac_kwargs = {"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
-        seed           :int   = int(time.time() * 1e5) % int(1e6),
-        steps_per_epoch:int   = 5000,
-        epochs         :int   = 100,
-        replay_size    :int   = int(1e6),
-        gamma          :float = 0.9,
-        polyak         :float = 0.995,
-        pi_lr          :float = 1e-4,
-        q_lr           :float = 1e-4,
-        batch_size     :int   = 100,
-        start_steps    :int   = 10000,
-        act_noise      :float = 0.1,
-        max_ep_len     :int   = 1000,
-        train_every    :int   = 50,
-        train_steps    :int   = 30,
+        seed             :int   = int(time.time() * 1e5) % int(1e6),
+        steps_per_epoch  :int   = 5000,
+        epochs           :int   = 100,
+        replay_size      :int   = int(1e6),
+        gamma            :float = 0.9,
+        polyak           :float = 0.995,
+        pi_lr            :float = 1e-2,
+        q_lr             :float = 1e-2,
+        batch_size       :int   = 100,
+        start_steps      :int   = 10000,
+        act_noise        :float = 0.1,
+        max_ep_len       :int   = 1000,
+        train_every      :int   = 50,
+        train_steps      :int   = 30,
+        p_loss_batch     :float = 0.0,
+        p_loss_objectives:float = 0.0,
+        p_Q_batch        :float = 0.0,
+        p_Q_objectives   :float = 0.0,
     ):
         self.ac_kwargs = ac_kwargs
         self.seed = seed
@@ -89,6 +92,10 @@ class HyperParams:
         self.max_ep_len = max_ep_len
         self.train_every = train_every
         self.train_steps = train_steps
+        self.p_loss_batch = p_loss_batch
+        self.p_loss_objectives = p_loss_objectives
+        self.p_Q_batch = p_Q_batch
+        self.p_Q_objectives = p_Q_objectives
 
 
 """
@@ -107,7 +114,7 @@ def ddpg(
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
-    run_description: str = None,
+    experiment_description: str = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
     """
@@ -196,9 +203,14 @@ def ddpg(
         # name the run
         name=experiment_name,
         # write a description of the run
-        notes=run_description,
+        notes=experiment_description,
     )
+    def exited_gracefully(*args, **kwargs):
+        weights_and_biases.finish()
+        exit(0)
 
+    signal.signal(signal.SIGINT, exited_gracefully)
+    signal.signal(signal.SIGTERM, exited_gracefully)
     assert isinstance(
         env.action_space, gym.spaces.Box
     ), "only continuous action space is supported"
@@ -216,18 +228,18 @@ def ddpg(
             env.observation_space, env.action_space, rew_dims, **hp.ac_kwargs
         )
 
-        pi_and_before_tanh = keras.Model(
+        pi_and_before_clip = keras.Model(
             pi_network.input,
-            {"pi": pi_network.output, "before_tanh": pi_network.layers[-2].output},
+            {"pi": pi_network.output, "before_clip": pi_network.layers[-2].output},
         )
-        pi_and_before_tanh.compile()
-        # q_and_before_sigmoid = keras.Model(
-        #     q_network.input, {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output})
-        q_and_before_sigmoid = keras.Model(
+        pi_and_before_clip.compile()
+        # q_and_before_clip = keras.Model(
+        #     q_network.input, {"q": q_network.output, "before_clip": q_network.layers[-2].output})
+        q_and_before_clip = keras.Model(
             q_network.input,
-            {"q": q_network.output, "before_sigmoid": q_network.layers[-2].output},
+            {"q": q_network.output, "before_clip": q_network.layers[-2].output},
         )
-        q_and_before_sigmoid.compile()
+        q_and_before_clip.compile()
     # Target networks
     with tf.name_scope("target"):
         # Note that the action placeholder going to actor_critic here is
@@ -264,11 +276,11 @@ def ddpg(
     def q_update(obs1, obs2, acts, rews, dones):
         with tf.GradientTape() as tape:
             # q_squeezed = tf.squeeze(q, axis=1)
-            outputs = q_and_before_sigmoid(tf.concat([obs1, acts], axis=-1))
+            outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
             q = outputs["q"]
-            before_sigmoid = outputs["before_sigmoid"]
 
-            before_sigmoid = tf.reduce_mean(sigmoid_regularizer(before_sigmoid))
+            # tf.print(before_clip)
+            # tf.print(outputs["before_clip"])
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
 
@@ -298,27 +310,25 @@ def ddpg(
             )
             qs_bellman_c = p_mean(
                 1.0 - tf.abs(q - backup),
-                p=-4.0,
+                p=hp.p_loss_batch,
                 axis=0,
-            )  # -before_tanh_c*1e-5
+            )  # -before_clip_c*1e-5
 
             # q_loss_dic = {}
             # tf.print(qc_losses)
             # for i in range(tf.shape(qc_losses)[0]):
             #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
-            q_bellman_c = p_mean(qs_bellman_c, -4.0)
-            with_reg = p_mean(
-                tf.stack(
-                    [
-                        scale_gradient(tf.squeeze(q_bellman_c), 3e2),
-                        scale_gradient(tf.squeeze(before_sigmoid), 0.1),
-                    ]
-                ),
-                p=0.0,
+            keep_in_range = p_mean(
+                move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
+            q_bellman_c = p_mean(qs_bellman_c, p=hp.p_loss_objectives)
+            with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
+            # tf.print(q_bellman_c)
+            # tf.print(with_reg)
+            # tf.print(before_clip)
             q_loss = 1.0 - with_reg
 
-            # q_loss = tf.reduce_mean((q - backup) ** 2) + before_sigmoid
+            # q_loss = tf.reduce_mean((q - backup) ** 2) + before_clip
             # q_loss = p_mean(q_loss, p=2)
 
         grads = tape.gradient(q_loss, q_network.trainable_variables)
@@ -329,32 +339,22 @@ def ddpg(
     @tf.function
     def pi_update(obs1, obs2, debug=False):
         with tf.GradientTape() as tape:
-            outputs = pi_and_before_tanh(obs1)
+            outputs = pi_and_before_clip(obs1)
             pi = outputs["pi"]
-            before_tanh = outputs["before_tanh"]
-            before_tanh_c = 1.0 - tf.reduce_mean(
-                tf.reshape(1.0 - move_toward_zero(before_tanh), [1, -1]) ** 2.0
-            )
-            #     [tf.reduce_mean(q_network(tf.concat([obs1, pi], axis=-1)))])
+            before_clip = outputs["before_clip"]
+            before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-1.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            qs_c, q_c = env.cmorl.q_composer(q_values)
-            all_c = p_mean(
-                tf.stack(
-                    [
-                        scale_gradient(tf.squeeze(q_c), 3e2),
-                        scale_gradient(tf.squeeze(before_tanh_c), 0.1),
-                    ]
-                ),
-                p=0.0,
+            qs_c, q_c = env.cmorl.q_composer(
+                q_values, p_batch=hp.p_Q_batch, p_objectives=hp.p_Q_objectives
             )
-            # print(qs_c.shape, q_c.shape, all_c.shape)
+            all_c = p_mean([q_c, before_clip_c], p=0.0)
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if debug:
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
         grads_and_vars = zip(grads, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
-        return all_c, qs_c, q_c, before_tanh_c
+        return all_c, qs_c, q_c, before_clip_c
 
     def get_action(o, noise_scale):
         minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
@@ -399,7 +399,7 @@ def ddpg(
 
         if np.isnan(a).any():
             # a = env.action_space.sample()
-            print("nan detected")
+            print(f"nan detected in action {a}")
             exit(1)
 
         # Step the env
@@ -443,17 +443,17 @@ def ddpg(
                     all_c,
                     qs_c,
                     q_c,
-                    before_tanh_c,
+                    before_clip_c,
                 ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
 
                 qs_c = qs_c.numpy()
                 logger.store(
                     # All=all_c,
                     Q_comp=q_c,
-                    Before_tanh=before_tanh_c,
+                    before_clip=before_clip_c,
                 )
                 weights_and_biases.log(
-                    {"Q-composed": q_c, "Before_tanh": before_tanh_c}
+                    {"Q-composed": q_c, "before_clip": before_clip_c}
                 )
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
@@ -498,7 +498,7 @@ def ddpg(
                 logger.log_tabular(f"EpRet_{i}", average_only=True)
             logger.log_tabular("Time", time.time() - start_time)
             logger.log_tabular("TotalEnvInteracts", t)
-            # logger.log_tabular("Before_tanh", average_only=True)
+            # logger.log_tabular("before_clip", average_only=True)
             # logger.log_tabular("Qs", average_only=True)
             for i in range(rew_dims):
                 logger.log_tabular(f"Q{i}", average_only=True)

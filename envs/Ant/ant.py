@@ -344,7 +344,7 @@ class AntEnv(MujocoEnv, utils.EzPickle):
         reset_noise_scale: float = 0.1,
         exclude_current_positions_from_observation: bool = True,
         include_cfrc_ext_in_observation: bool = True,
-        reward_fn: RewardFnType = multi_dim_reward,
+        reward_fn: RewardFnType = multi_dim_reward_joints,
         **kwargs,
     ):
         utils.EzPickle.__init__(
@@ -483,9 +483,6 @@ class AntEnv(MujocoEnv, utils.EzPickle):
             self.render()
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
 
-        # Save the velocity in the x in a .txt file
-        with open("velocity.txt", "a") as f:
-            f.write(str(x_velocity) + "\n")
         return observation, reward, terminated, False, info
 
     def _get_rew(self, x_velocity: float, action):

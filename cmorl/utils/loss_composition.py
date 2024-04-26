@@ -38,7 +38,7 @@ def tf_pop(tensor, axis):
 
 
 @tf.function
-def p_mean(l, p: float, slack=1e-15, default_val=tf.constant(0.0), axis=None):
+def p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None, dtype=tf.float64):
     """
     The Generalized mean
     l: a tensor of elements we would like to compute the p_mean with respect to, elements must be > 0.0
@@ -47,9 +47,12 @@ def p_mean(l, p: float, slack=1e-15, default_val=tf.constant(0.0), axis=None):
     axis: axis or axese to collapse the pmean with respect to, None would collapse all
     https://www.wolframcloud.com/obj/26a59837-536e-4e9e-8ed1-b1f7e6b58377
     """
-    p = tf.cast(p, tf.float32)
-    l = tf.cast(l, tf.float32)
-    p = tf.where(tf.abs(tf.cast(p, tf.float32)) < 1e-5, -1e-5 if p < 0.0 else 1e-5, p)
+    l = tf.cast(tf.convert_to_tensor(l), dtype)
+    p = tf.cast(p, l.dtype)
+    slack = tf.cast(slack, l.dtype)
+    default_val = tf.cast(default_val, l.dtype)
+    min_val = tf.constant(1e-5, dtype = l.dtype)
+    p = tf.where(tf.abs(p) < min_val, -min_val if p < 0.0 else min_val, p)
 
     return tf.cond(tf.reduce_prod(tf.shape(l)) == 0 # condition if an empty array is fed in
         , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(l), axis)) if axis else default_val
@@ -96,3 +99,25 @@ def move_toward_zero(x):
 @tf.function
 def sigmoid_regularizer(x):
     return tf.where(tf.abs(x) > 3, tf.abs(x), 0)
+
+
+@tf.custom_gradient
+def move_towards_range(x, min, max):
+    min = tf.cast(min, x.dtype)
+    max = tf.cast(max, x.dtype)
+    normalized = 2.0*(x-min)/(max-min)-1.0
+    in_range = tf.abs(normalized) <= 1.0
+    def grad(dy):
+        return -dy*tf.where(in_range, 0.0, normalized-tf.sign(normalized)), None, None
+
+    return 1.0 / tf.where(in_range, 1.0, tf.abs(normalized)**0.5), grad
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    with tf.GradientTape() as gt:
+        x = tf.Variable(tf.linspace(-2.0, 2.0, 100))
+        y = move_towards_range(x, 0.0, 1.0)
+
+    plt.plot(x, gt.gradient(y,x))
+    plt.plot(x, y)
+    plt.show()

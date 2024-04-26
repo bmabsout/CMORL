@@ -3,6 +3,7 @@ from keras import Model
 from keras.layers import Dense, Input, Rescaling, Activation
 from gymnasium import spaces
 import keras
+import tensorflow as tf
 
 def mlp_functional(
     inputs,
@@ -50,6 +51,26 @@ class RescalingFixed(Rescaling):
         super().__init__(scale, offset, **kwargs)
 
 
+class ClipLayer(Activation):
+    def __init__(self, min, max, **kwargs):
+        self.min = min
+        self.max = max
+        if "activation" in kwargs:
+            del kwargs["activation"]
+        super().__init__(activation=lambda x: tf.clip_by_value(x, min, max), **kwargs)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "min": self.min,
+            "max": self.max,
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 
 def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer):
     inputs = Input((obs_space.shape[0],))
@@ -62,11 +83,10 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
         output_activation=None,
         activation="relu",
     )
-    tanhed = Activation("tanh")(linear_output)
-    # clipped = Lambda(lambda t: tf.clip_by_value(
-    #     t, -1.0, 1.0))(normed)
+    # tanhed = Activation("tanh")(linear_output)
+    clipped = ClipLayer(-1.0, 1.0)(linear_output)
     # scaled = scale_by_space(normed, act_space)
-    model = keras.Model(inputs, tanhed)
+    model = keras.Model(inputs, clipped)
     model.compile()
     return model
 
@@ -86,9 +106,9 @@ def critic(
     )
 
     # name the layer before sigmoid
-    before_sigmoid = RescalingFixed(0.1, offset=-0.5, name="before_sigmoid")(outputs)
+    before_clip = RescalingFixed(1.0, offset=0.3, name="before_clip")(outputs)
 
-    biased_normed = Activation("sigmoid")(before_sigmoid)
+    biased_normed = ClipLayer(0.0, 1.0)(before_clip)
     model = keras.Model(inputs, biased_normed)
     model.compile()
     return model
