@@ -26,6 +26,7 @@ buildPythonPackage rec {
     dm-tree
     rich
     pybox2d
+    matplotlib
     # (callPackage ./pybox2d.nix {})
     # (callPackage ./stable-baselines3.nix {})
     (callPackage ./mujoco-py.nix {})
