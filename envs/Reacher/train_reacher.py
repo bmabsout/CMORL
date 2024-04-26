@@ -25,7 +25,7 @@ reacher_serializer = lambda: args_utils.Arg_Serializer.join(
             ),
         }
     ),
-    args_utils.default_serializer(),
+    args_utils.default_serializer(experiment_name="Reacher", epochs=50),
 )
 
 
@@ -54,7 +54,7 @@ def train(cmd_args, serializer):
         train_steps=30,
     )
     generated_params = train_utils.create_train_folder_and_params(
-        "Reacher-custom", hp, cmd_args, serializer
+        hp, cmd_args, serializer
     )
     env_fn = lambda: reacher.ReacherEnv(
         goal_distance=cmd_args.distance,
@@ -67,5 +67,4 @@ def train(cmd_args, serializer):
 if __name__ == "__main__":
     serializer = reacher_serializer()
     cmd_args = args_utils.parse_arguments(serializer)
-    cmd_args.epochs = 50
     train(cmd_args, serializer)

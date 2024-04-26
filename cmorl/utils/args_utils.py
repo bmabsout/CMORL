@@ -73,17 +73,24 @@ class Arg_Serializer:
         return f"trained/{experiment_name}/{self.get_semantic_folder_name(hypers)}/seeds/{hypers['seed']}"
 
 
-def rl_alg_serializer(epochs=50, learning_rate=3e-3):
+def rl_alg_serializer(experiment_name=None, epochs=50, learning_rate=3e-3):
     return Arg_Serializer(
         abbrev_to_args={
             "e": Serialized_Argument(
-                name="--epochs", type=int, default=epochs, help="number of epochs"
+                name="--epochs",
+                type=int,
+                default=epochs,
+                help="number of epochs"
             ),
             "s": Serialized_Argument(
-                name="--seed", type=int, default=int(time.time() * 1e5) % int(1e6)
+                name="--seed",
+                type=int,
+                default=int(time.time() * 1e5) % int(1e6)
             ),
             "l": Serialized_Argument(
-                name="--learning_rate", type=float, default=learning_rate
+                name="--learning_rate",
+                type=float,
+                default=learning_rate
             ),
             "p": Serialized_Argument(
                 name="--prev_folder",
@@ -95,8 +102,15 @@ def rl_alg_serializer(epochs=50, learning_rate=3e-3):
                 action="store_true",
                 help="whether to save the replay buffer",
             ),
+            "n": Serialized_Argument(
+                name="--experiment_name",
+                type=str,
+                required=True if experiment_name is None else False,
+                default=experiment_name,
+                help="name of the experiment"
+            ),
         },
-        ignored={"save_path", "seed", "replay_save"},
+        ignored={"save_path", "seed", "replay_save", "experiment_name"},
     )
 
 
@@ -104,10 +118,9 @@ def objective_composition_serializer():
     return Arg_Serializer(abbrev_to_args={}, ignored=set())
 
 
-def default_serializer(epochs=50, learning_rate=3e-3):
+def default_serializer(epochs:int=50, learning_rate:int=3e-3, experiment_name=None):
     return Arg_Serializer.join(
-        # ArgsSerializer({'n': Serialized_Argument(name='--experiment_name', type=str, required=True)}, ignored={'experiment_name'}),
-        rl_alg_serializer(epochs, learning_rate),
+        rl_alg_serializer(experiment_name=experiment_name, epochs=epochs, learning_rate=learning_rate),
         objective_composition_serializer(),
     )
 

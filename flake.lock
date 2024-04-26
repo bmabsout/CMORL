@@ -39,27 +39,26 @@
         ]
       },
       "locked": {
-        "lastModified": 1710943022,
+        "lastModified": 1710942276,
         "narHash": "sha256-+K0UtpWhsA5X0kZpN2eaBI6TP2OvrQAWFvtoeICWmhM=",
         "owner": "kenranunderscore",
         "repo": "nixGL",
-        "rev": "03099db76982ef2bbaf9e7ca0488fff83fc8b5a8",
+        "rev": "c58137326ef0bac8a504111591692ad849f49029",
         "type": "github"
       },
       "original": {
         "owner": "kenranunderscore",
-        "ref": "handle-unset-buildInputs",
         "repo": "nixGL",
         "type": "github"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1711163522,
-        "narHash": "sha256-YN/Ciidm+A0fmJPWlHBGvVkcarYWSC+s3NTPk/P+q3c=",
+        "lastModified": 1713714899,
+        "narHash": "sha256-+z/XjO3QJs5rLE5UOf015gdVauVRQd2vZtsFkaXBq2Y=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "44d0940ea560dee511026a53f0e2e2cde489b4d4",
+        "rev": "6143fc5eeb9c4f00163267708e26191d1e918932",
         "type": "github"
       },
       "original": {

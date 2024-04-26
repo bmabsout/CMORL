@@ -1,37 +1,83 @@
-from os import path
 from typing import Optional
 
 import numpy as np
 
 import gymnasium as gym
 from gymnasium import spaces
-from gymnasium.envs.classic_control import utils
 from gymnasium.error import DependencyNotInstalled
 
 import tensorflow as tf
 from cmorl.utils.loss_composition import p_mean
 from cmorl.utils.reward_utils import CMORL, RewardFnType
-
-def multi_dim_reward(state, action, env: "BoidsEnv"):
-
-    return np.array([0.0])
+from toroid_utils import toroidal_distance, toroidal_pairwise_dist
 
 
-def composed_reward_fn(state, action, env: "BoidsEnv"):
-    
+@tf.function
+def flatten_upper_triangle(matrix):
+    """
+        Flattens the upper triangle of a matrix.
+        Args:
+            matrix,    [m,n] matrix
+        Returns:
+            flattened,    [(m*n-1)/2] vector
+    """
+    upper_triangle = tf.where(tf.linalg.band_part(tf.ones_like(matrix), -1, 0) == 0.0, True, False)
+    return tf.boolean_mask(matrix, upper_triangle)
+
+def multi_dim_reward(flat_state, flat_u, env: "BoidsEnv"):
+    state = convert_state_to_dict(flat_state, env.numBoids)
+    action = convert_action_to_dict(flat_u, env.numBoids)
+    go_fast = tf.norm(state["vel"], axis=0)/env.max_speed
+    max_toroidal_distance = (0.5**2.0 + 0.5**2.0)**0.5 # toroidal distance means at worst we are (0.5, 0.5) away
+    dists = flatten_upper_triangle(toroidal_pairwise_dist(state["pos"], state["pos"]))/ max_toroidal_distance
+    minimize_distance = 1.0 - dists
+    avoid_collisions = tf.where(dists < 0.025, dists/0.025, 1.0)
+    small_actions = 1.0 - tf.abs(action["angle_change"])/convert_action_to_dict(env.action_space.high, env.numBoids)["angle_change"]
+    return np.concatenate([go_fast, minimize_distance, avoid_collisions, small_actions])
+
+
+def composed_reward_fn(flat_state, flat_u, env: "BoidsEnv"):
     return 0.0
+
+@tf.function
+def convert_state_to_dict(flat_state: tf.Tensor, numBoids: int):
+    state = tf.transpose(tf.reshape(flat_state, (numBoids, 4)))
+    return {"pos": state[:2], "vel": state[2:]}
+
+@tf.function
+def convert_action_to_dict(flat_u: tf.Tensor, numBoids: int):
+    u = tf.transpose(tf.reshape(flat_u, (numBoids, 2)))
+    return {"setpoint_vel_mag": u[0], "angle_change": u[1]}
 
 
 @tf.function
 def q_composer(q_values):
-    # q1_c = q_values[0]
-    # q2_c = q_values[1]
-    # q_values = tf.stack([q1_c, q2_c], axis=0)
-    qs_c = tf.reduce_mean(q_values, axis=0)
+    qs_c = p_mean(q_values, p=0.0, axis=0)
     q_c = p_mean(qs_c, p=-4.0)
     return qs_c, q_c
 
 
+@tf.function
+def difference_eq(flat_state: tf.Tensor, flat_u: tf.Tensor, numBoids: int, dt: float, max_speed: float):
+    # state is a tensor of shape (4*numBoids)
+    # u is a tensor of shape (2*numBoids)
+    state = convert_state_to_dict(flat_state, numBoids)
+    action = convert_action_to_dict(flat_u, numBoids)
+    # get angle of vel
+    curr_angle = tf.atan2(state["vel"][1], state["vel"][0])
+    new_angle = curr_angle + action["angle_change"]*dt
+    new_anglexy = tf.stack([tf.cos(new_angle), tf.sin(new_angle)], axis=0)
+    # using leapfrog integration
+    vel_mag = tf.norm(state["vel"], axis=0)
+    new_vel_mag = vel_mag*(1.0 - dt) + action["setpoint_vel_mag"]*dt
+    new_vel = new_anglexy*new_vel_mag
+    # new_vel = vel*(1.0 - dt) + (setpoint_vel - vel)*dt
+    # clamp velocity
+    new_vel = tf.clip_by_norm(new_vel, max_speed, axes=[0])
+    new_pos = state["pos"] + new_vel*dt
+    # let the position wrap ala torus
+    new_pos = tf.math.floormod(new_pos, 1.0)
+    return tf.reshape(tf.transpose(tf.concat([new_pos, new_vel], axis=0)), [-1])
 
 class BoidsEnv(gym.Env):
 
@@ -54,7 +100,7 @@ class BoidsEnv(gym.Env):
     Actions:
         Type: Box(2*numBoids)
         Num     Action                      Min                     Max
-        0       acceleration                -max_acc                max_acc
+        0       setpoint velocity           0.0                     max_speed
         1       angular velocity            -max_angular_speed      max_angular_speed
         
     """
@@ -62,21 +108,22 @@ class BoidsEnv(gym.Env):
 
     metadata = {
         "render_modes": ["human", "rgb_array"],
-        "render_fps": 60,
+        "render_fps": 20,
     }
 
     def __init__(
         self,
         render_mode: Optional[str] = None,
         screen=None,
-        numBoids: int = 10,
-        # reward_fn: RewardFnType = composed_reward_fn,
+        numBoids: int = 5,
+        max_speed = 1.0,
+        max_angular_speed = 360.0*np.pi/180.0, # rads/s
         reward_fn: RewardFnType = multi_dim_reward,
     ):
-        max_speed = 1.0
-        max_angular_speed = 360.0*np.pi/180.0 # rads/s
+        self.max_speed = max_speed
+        self.numBoids = numBoids
 
-        dt = 1.0/(self.metadata["render_fps"] if render_mode== "human" else 20.0)
+        self.dt = 1.0/(self.metadata["render_fps"] if render_mode == "human" else 20.0)
 
         self.render_mode = render_mode
 
@@ -85,12 +132,18 @@ class BoidsEnv(gym.Env):
         self.clock = None
         self.isopen = True
         
-        max_vel = np.array([max_speed, max_speed])
-        max_pos = np.array([1.0, 1.0])
-        min_pos = np.array([0.0, 0.0])
+        max_vel = np.array([max_speed, max_speed], dtype=np.float32)
+        max_pos = np.array([1.0, 1.0], dtype=np.float32)
+        min_pos = np.array([0.0, 0.0], dtype=np.float32)
         obs_low = np.tile(np.concatenate([min_pos, -max_vel]), numBoids)
         obs_high = np.tile(np.concatenate([max_pos, max_vel]), numBoids)
         self.observation_space = spaces.Box(
+            low=obs_low,
+            high=obs_high,
+            dtype=np.float32
+        )
+
+        self.relative_observation_space = spaces.Box(
             low=obs_low,
             high=obs_high,
             dtype=np.float32
@@ -107,49 +160,21 @@ class BoidsEnv(gym.Env):
         ).shape[0]
         self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
 
-        @tf.function
-        def difference_eq(flat_state: tf.Tensor, flat_u: tf.Tensor):
-            # state is a tensor of shape (4*numBoids)
-            # u is a tensor of shape (2*numBoids)
-            state = tf.transpose(tf.reshape(flat_state, (numBoids, 4)))
-            # state has shape (4, numBoids)
-            pos = state[:2]
-            vel = state[2:]
-            u = tf.transpose(tf.reshape(flat_u, (numBoids, 2)))
-            setpoint_vel_mag = u[0]
-            angle_change = u[1]
-            # get angle of vel
-            curr_angle = tf.atan2(vel[1], vel[0])
-            new_angle = curr_angle + angle_change*dt
-            new_anglexy = tf.stack([tf.cos(new_angle), tf.sin(new_angle)], axis=0)
-            # using leapfrog integration
-            vel_mag = tf.norm(vel, axis=0)
-            new_vel_mag = vel_mag*(1.0 - dt) + setpoint_vel_mag*dt
-            new_vel = new_anglexy*new_vel_mag
-            # new_vel = vel*(1.0 - dt) + (setpoint_vel - vel)*dt
-            # clamp velocity
-            # new_vel = tf.clip_by_norm(new_vel, max_speed)
-            new_pos = pos + new_vel*dt
-            # let the position wrap ala torus
-            new_pos = tf.math.floormod(new_pos, 1.0)
-            return tf.reshape(tf.transpose(tf.concat([new_pos, new_vel], axis=0)), [-1])
-
-
-        self.difference_eq = difference_eq
+    def get_obs(self):
+        return self.state
 
 
     def step(self, u):
-
-        self.state = self.difference_eq(self.state, u)
+        self.state = difference_eq(self.state, u, self.numBoids, self.dt, self.max_speed)
         reward = self.cmorl(self.state, u, self)
-        return self.state, reward, False, False, {}
+        return self.get_obs(), reward, False, False, {}
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
-        self.state = self.observation_space.sample()
+        self.state = options["state"] if options else self.observation_space.sample()
         if self.render_mode == "human":
             self.render()
-        return self.state, {}
+        return self.get_obs(), {}
 
     def render(self):
         if self.render_mode is None:
@@ -160,10 +185,8 @@ class BoidsEnv(gym.Env):
                 f'e.g. gym.make("{self.spec.id}", render_mode="rgb_array")'
             )
             return
-
         try:
             import pygame
-            from pygame import gfxdraw
         except ImportError as e:
             raise DependencyNotInstalled(
                 "pygame is not installed, run `pip install gymnasium[classic-control]`"
@@ -181,21 +204,16 @@ class BoidsEnv(gym.Env):
         if self.clock is None:
             self.clock = pygame.time.Clock()
         
-        self.surf = pygame.Surface((self.screen_dim, self.screen_dim))
-        self.surf.fill((255, 255, 255))
-
-        for i in range(0, self.state.shape[0], 4):
-            x = int(self.state[i]*self.screen_dim)
-            y = int(self.state[i+1]*self.screen_dim)
-            x2 = int(x + self.state[i+2]*self.screen_dim)
-            y2 = int(y + self.state[i+3]*self.screen_dim)
-            pygame.draw.line(self.surf, (0, 0, 0), (x, y), (x2, y2), 1)
-            pygame.gfxdraw.filled_circle(self.surf, x, y, 5, (0, 0, 0))
         
-        self.surf = pygame.transform.flip(self.surf, False, True)
-        self.screen.blit(self.surf, (0, 0))
+
+        self.drawBoids()
 
         if self.render_mode == "human":
+            # use mouse position to set the first boid's pos
+            # mouse_pos = pygame.mouse.get_pos()
+            # self.state = np.array(self.state, dtype=np.float32)
+            # self.state[0] = 1.0 + mouse_pos[0]/self.screen_dim
+            # self.state[1] = 1.0 - mouse_pos[1]/self.screen_dim
             pygame.event.pump()
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
@@ -204,28 +222,42 @@ class BoidsEnv(gym.Env):
                 np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
             )
         
+    def drawBoids(self):
+        import pygame
+        self.surf = pygame.Surface((self.screen_dim, self.screen_dim))
+        self.surf.fill((255, 255, 255))
+        screen_state = convert_state_to_dict(tf.cast(self.state*self.screen_dim, tf.int32), self.numBoids)
+        for i in range(self.numBoids):
+            screen_pos = screen_state["pos"][:, i]
+            screen_vel = screen_state["vel"][:, i]
+            pygame.gfxdraw.filled_circle( self.surf, *screen_pos, 5, (0, 0, 0))
+            pygame.draw.line(self.surf, (0, 0, 0), screen_pos,screen_pos+screen_vel, 1)
+        
+        self.surf = pygame.transform.flip(self.surf, False, True)
+        self.screen.blit(self.surf, (0, 0))
 
     def close(self):
         if self.screen is not None:
             import pygame
-
             pygame.display.quit()
             pygame.quit()
             self.isopen = False
 
-def normed_angular_distance(a, b):
-    diff = (b - a + np.pi) % (2 * np.pi) - np.pi
-    return np.abs(diff + 2 * np.pi if diff < -np.pi else diff) / np.pi
-
 
 if __name__ == "__main__":
     env = BoidsEnv(numBoids=2, render_mode="human")
-    env.reset()
-    env.state = tf.constant([0.5, 0.5, 0.0, 0.0, 0.5,0.5,0.0,0.0], dtype=tf.float32)
+    state = np.tile([0.5, 0.5, 0.0, 0.0], env.numBoids)
+    state[0] = 0.0
+    state[1] = 0.0
+    state[4] = 0.05
+    state[5] = 0.05
+    env.reset(options={"state": tf.constant(state, dtype=tf.float32)})
+    # env.state = tf.constant([0.5, 0.5, 0.0, 0.0], dtype=tf.float32)
     for _ in range(1000):
+        # action = np.tile(np.array([0.0, 0.0], dtype=np.float32), env.numBoids)
         action = env.action_space.sample()
-        action[0] = 1.0
-        action[1] = env.action_space.high[1]
+        # action[0] = 1.0
+        # action[1] = env.action_space.high[1]
         env.step(action)
         env.render()
     env.close()

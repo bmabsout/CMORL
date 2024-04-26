@@ -1,7 +1,9 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nixgl.url = "github:kenranunderscore/nixGL/handle-unset-buildInputs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"; # cuda stuff requires compilation in nixos-unstable
+    # nixpkgs-unfree.url = github:SomeoneSerge/nixpkgs-unfree;
+    # nixpkgs-unfree.inputs.nixpkgs.follows = "nixpkgs";
+    nixgl.url = "github:kenranunderscore/nixGL";
     nixgl.inputs.nixpkgs.follows = "nixpkgs";
     flake-compat = {
       url = "github:edolstra/flake-compat";
@@ -17,8 +19,8 @@
         (system: f system (import nixpkgs {
           inherit system;
           overlays=[nixgl.overlay];
-          config.allowUnfree=true;
-          # config.cudaSupport = true;
+          #config.cudaSupport = true;
+          #config.allowUnfree = true;
           # config.cudaCapabilities = [ "8.6" ];
         }));
       
@@ -26,13 +28,20 @@
     {
       # enter this python environment by executing `nix shell .`
       devShell = forAllSystems (system: pkgs:
-        let cmorl = pkgs.python3Packages.callPackage ./nix/cmorl.nix {};
-            python = pkgs.python3.withPackages (p: cmorl.propagatedBuildInputs);
+        let python = pkgs.python3.override {
+              packageOverrides = (self: super: {
+                # torch = throw "lesh";
+                tensorflow = super.tensorflow-bin;
+                torch = super.torch-bin;
+              });
+            };
+            cmorl = python.pkgs.callPackage ./nix/cmorl.nix {python3Packages = python.pkgs;};
+            pythonWithCMORL = python.withPackages (p: cmorl.propagatedBuildInputs);
         in pkgs.mkShell {
             buildInputs = [
                 # pkgs.nixgl.auto.nixGLDefault
                 pkgs.nixgl.nixGLIntel
-                python
+                pythonWithCMORL
             ];
             shellHook = ''
               export PYTHONPATH=$PYTHONPATH:$(pwd) # to allow cmorl to be imported as editable
