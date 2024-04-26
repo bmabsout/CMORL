@@ -64,8 +64,8 @@ class HyperParams:
         replay_size: int = int(1e6),
         gamma: float = 0.9,
         polyak: float = 0.995,
-        pi_lr: float = 1e-4,
-        q_lr: float = 1e-4,
+        pi_lr: float = 1e-2,
+        q_lr: float = 1e-2,
         batch_size: int = 100,
         start_steps: int = 10000,
         act_noise: float = 0.1,
@@ -206,7 +206,7 @@ def ddpg(
         notes=experiment_description,
     )
 
-    def exited_gracefully():
+    def exited_gracefully(*args, **kwargs):
         weights_and_biases.finish()
         exit(0)
 

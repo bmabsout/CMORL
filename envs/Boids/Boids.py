@@ -45,7 +45,7 @@ def multi_dim_reward(flat_state, flat_u, env: "BoidsEnv"):
     minimize_distance = 1.0 - dists # tf.where(dists > 0.7, 0.0, (0.7-dists)/0.7)
     avoid_collisions = tf.where(dists < 0.025, dists/0.025, 1.0)
     small_actions = 1.0 - tf.abs(action["angle_change"])/convert_action_to_dict(env.action_space.high, env.numBoids)["angle_change"]
-    return np.concatenate([go_fast, minimize_distance, avoid_collisions, small_actions])
+    return np.concatenate([go_fast, minimize_distance**2.0, avoid_collisions, small_actions])
 
 class BoidsEnv(gym.Env):
 
