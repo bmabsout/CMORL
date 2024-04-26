@@ -18,7 +18,7 @@
           inherit system;
           overlays=[nixgl.overlay];
           config.allowUnfree=true;
-          # config.cudaSupport = true;
+          config.cudaSupport = true;
           # config.cudaCapabilities = [ "8.6" ];
         }));
       
