@@ -1,5 +1,5 @@
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
-from cmorl.utils import args_utils
+from cmorl.utils import args_utils, p_value_sampling_analysis
 from Pendulum import PendulumEnv
 import Pendulum
 
@@ -37,11 +37,7 @@ def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
 
 
 if __name__ == "__main__":
-    import itertools
-
-    p_values = range(-50, 51, 2)
-    # train every possible p-value combination of 4 values from p_values
-    p_values_list = list(itertools.product(p_values, repeat=4))
-    print(f"Training {len(p_values_list)} different p-value combinations.")
+    p_values_list = p_value_sampling_analysis.sample_p_values(n_samples=50, mean=0, std=15, low=-50, high=50)
     for p_values in p_values_list:
-        parse_args_and_train(p_values_list=p_values)
+        parse_args_and_train(p_values_list=p_values)   
+    
