@@ -401,7 +401,10 @@ def ddpg(
         if np.isnan(a).any():
             # a = env.action_space.sample()
             print(f"nan detected in action {a}")
-            exit(1)
+            # exit(1)
+            # Log the occurrence in Weights and Biases
+            weights_and_biases.log({"message": "NaN detected in action"})
+            return
 
         # Step the env
         o2, r, d, _, _ = env.step(a)
