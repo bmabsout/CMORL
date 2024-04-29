@@ -18,10 +18,8 @@ def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
         seed=cmd_args.seed,
         max_ep_len=200,
         steps_per_epoch=5000,
-        p_loss_batch=p_values_list[0],
-        p_loss_objectives=p_values_list[1],
-        p_Q_batch=p_values_list[2],
-        p_Q_objectives=p_values_list[3],
+        p_Q_batch=p_values_list[0],
+        p_Q_objectives=p_values_list[1],
     )
     generated_params = train_utils.create_train_folder_and_params(
         "Pendulum-custom", hp, cmd_args, serializer

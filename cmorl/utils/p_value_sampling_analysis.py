@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 def sample_p_values(n_samples=50, mean=0, std=15, low=-50, high=50):
     p_values_list = []
     for i in range(n_samples):
-        p_values = [np.random.normal(mean, std) for _ in range(4)]
+        p_values = [np.random.normal(mean, std) for _ in range(2)]
         p_values = [int(p) for p in p_values]
         p_values = [max(low, min(high, p)) for p in p_values]
         p_values_list.append(p_values)
