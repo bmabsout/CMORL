@@ -8,7 +8,7 @@ def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=8, learning_rate=1e-2)
+    serializer = args_utils.default_serializer(epochs=5, learning_rate=1e-2)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams(
         start_steps=2000,

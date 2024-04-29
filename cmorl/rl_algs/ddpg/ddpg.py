@@ -72,8 +72,6 @@ class HyperParams:
         max_ep_len: int = 1000,
         train_every: int = 50,
         train_steps: int = 30,
-        p_loss_batch: float = 0.0,
-        p_loss_objectives: float = 0.0,
         p_Q_batch: float = 0.0,
         p_Q_objectives: float = 0.0,
     ):
@@ -92,8 +90,6 @@ class HyperParams:
         self.max_ep_len = max_ep_len
         self.train_every = train_every
         self.train_steps = train_steps
-        self.p_loss_batch = p_loss_batch
-        self.p_loss_objectives = p_loss_objectives
         self.p_Q_batch = p_Q_batch
         self.p_Q_objectives = p_Q_objectives
 
@@ -287,42 +283,15 @@ def ddpg(
 
             batch_size = tf.shape(dones)[0]
 
-            # # calculate q_loss for every single reward by looping through them
-            # dones_i = dones
-            # dones_i = tf.broadcast_to(tf.expand_dims(dones_i, -1), (batch_size, 1))
-            # # split rews and q_pi_targ along the last axis
-            # rews_i = rews
-            # rews_i = tf.split(rews_i, rew_dims, axis=-1)
-            # q_pi_targ_i = q_pi_targ
-            # q_pi_targ_i = tf.split(q_pi_targ_i, rew_dims, axis=-1)
-            # # create a dict to store the loss for each reward
-            # q_loss_dic = {}
-            # for i in range(rew_dims):
-            #     backup_i = tf.stop_gradient(
-            #         rews_i[i] / max_q_val[i] + (1 - dones_i) * hp.gamma * q_pi_targ_i[i]
-            #     )
-            #     q_loss_i = p_mean(1 - tf.abs(q[:, i] - backup_i), p=0.0)
-            #     q_loss_dic[f"Q-loss_{i}"] = q_loss_i
-
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
 
             backup = tf.stop_gradient(
                 rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
             )
-            qs_bellman_c = p_mean(
-                1.0 - tf.abs(q - backup),
-                p=hp.p_loss_batch,
-                axis=0,
-            )  # -before_clip_c*1e-5
-
-            # q_loss_dic = {}
-            # tf.print(qc_losses)
-            # for i in range(tf.shape(qc_losses)[0]):
-            #     q_loss_dic[f"Q-loss_{i}"] = qc_losses[i]
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
-            q_bellman_c = p_mean(qs_bellman_c, p=hp.p_loss_objectives)
+            q_bellman_c = 1.0 - p_mean(tf.abs(q-backup), p=2.0)
             with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
             # tf.print(q_bellman_c)
             # tf.print(with_reg)
@@ -335,7 +304,7 @@ def ddpg(
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return q_loss, qs_bellman_c
+        return q_bellman_c, keep_in_range
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
@@ -438,9 +407,11 @@ def ddpg(
                 rews = tf.constant(batch["rews"])
                 dones = tf.constant(batch["done"])
                 # Q-learning update
-                loss_q, q_losses = q_update(obs1, obs2, acts, rews, dones)
-                logger.store(LossQ=loss_q)
-                weights_and_biases.log({"Q-Loss": loss_q})
+                qloss_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones)
+                logger.store(LossQ=1.0 - qloss_c)
+                weights_and_biases.log({"Q-Loss": 1.0 - qloss_c})
+                logger.store(Q_before_clip_c=q_before_clip_c)
+                weights_and_biases.log({"Q-before_clip_c": q_before_clip_c})
                 # print(loss_q)
                 # Policy update
                 (
@@ -511,9 +482,6 @@ def ddpg(
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
 
-            weights_and_biases.log(
-                {f"LossQ[{i}]": q_loss for i, q_loss in enumerate(q_losses)}
-            )
 
     # [optional] finish the wandb run, necessary in notebooks
     weights_and_biases.finish()

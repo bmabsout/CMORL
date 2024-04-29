@@ -115,10 +115,23 @@ def rl_alg_serializer(experiment_name=None, epochs=50, learning_rate=3e-3):
 
 
 def objective_composition_serializer():
-    return Arg_Serializer(abbrev_to_args={}, ignored=set())
+    return Arg_Serializer(abbrev_to_args={
+        "pb": Serialized_Argument(
+                name="--p_Q_batch",
+                type=float,
+                default=0.0,
+                help="the p-mean p for composing the batch of Qs"
+            ),
+        "po": Serialized_Argument(
+            name="--p_Q_objectives",
+            type=float,
+            default=0.0,
+            help="the p-mean p for composing the Q-value of the objectives together"
+        ),
+    }, ignored=set())
 
 
-def default_serializer(epochs:int=50, learning_rate:int=3e-3, experiment_name=None):
+def default_serializer(epochs:int=50, learning_rate:float=3e-3, experiment_name=None):
     return Arg_Serializer.join(
         rl_alg_serializer(experiment_name=experiment_name, epochs=epochs, learning_rate=learning_rate),
         objective_composition_serializer(),

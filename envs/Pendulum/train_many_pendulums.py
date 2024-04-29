@@ -8,7 +8,7 @@ def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=5, learning_rate=1e-4)
+    serializer = args_utils.default_serializer(epochs=5, learning_rate=1e-2)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams(
         start_steps=1000,
@@ -17,7 +17,7 @@ def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
         pi_lr=cmd_args.learning_rate,
         seed=cmd_args.seed,
         max_ep_len=200,
-        steps_per_epoch=1000,
+        steps_per_epoch=5000,
         p_loss_batch=p_values_list[0],
         p_loss_objectives=p_values_list[1],
         p_Q_batch=p_values_list[2],
