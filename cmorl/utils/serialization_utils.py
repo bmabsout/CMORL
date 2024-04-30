@@ -38,4 +38,4 @@ def serialize_leaf(o: Any) -> str:
 
 
 def serialize_dict(args: dict) -> str:
-    return ",".join(f"{k}:{serialize_leaf(v)}" for k, v in sorted(args.items(), key=lambda kv: kv[0]) if v)
+    return ",".join([f"{k}:{serialize_leaf(v)}" for k, v in sorted(args.items(), key=lambda kv: kv[0]) if v is not None])

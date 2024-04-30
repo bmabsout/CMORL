@@ -56,7 +56,7 @@ class Arg_Serializer:
         serialize_me: dict[str, Any] = {}
         for name, value in hypers.items():
             abbrev = self.name_to_abbrev.get(name)
-            if abbrev:
+            if abbrev is not None:
                 serialize_me[abbrev] = value
             else:
                 extra_args[name] = value
