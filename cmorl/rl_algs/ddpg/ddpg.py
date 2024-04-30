@@ -291,7 +291,7 @@ def ddpg(
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
-            q_bellman_c = 1.0 - p_mean(tf.abs(q-backup), p=2.0)
+            q_bellman_c = 1.0 - p_mean(tf.abs(q - backup), p=2.0)
             with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
             # tf.print(q_bellman_c)
             # tf.print(with_reg)
@@ -370,10 +370,10 @@ def ddpg(
         if np.isnan(a).any():
             # a = env.action_space.sample()
             print(f"nan detected in action {a}")
-            weights_and_biases.log({"message": "NaN detected in action"})
-            exit(1)
             # Log the occurrence in Weights and Biases
-            # return
+            weights_and_biases.log({"message": "NaN detected in action"})
+            # exit(1)
+            return
 
         # Step the env
         o2, r, d, _, _ = env.step(a)
@@ -481,7 +481,6 @@ def ddpg(
             # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
-
 
     # [optional] finish the wandb run, necessary in notebooks
     weights_and_biases.finish()

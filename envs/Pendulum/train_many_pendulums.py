@@ -35,7 +35,9 @@ def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
 
 
 if __name__ == "__main__":
-    p_values_list = p_value_sampling_analysis.sample_p_values(n_samples=50, mean=0, std=15, low=-50, high=50)
+    # p_values_list = p_value_sampling_analysis.sample_p_values(
+    #     n_samples=50, mean=0, std=15, low=-50, high=50
+    # )
+    p_values_list = [-50, -10, -1, 0, 1, 10, 50]
     for p_values in p_values_list:
-        parse_args_and_train(p_values_list=p_values)   
-    
+        parse_args_and_train(p_values_list=p_values)
