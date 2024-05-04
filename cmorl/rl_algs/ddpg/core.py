@@ -106,7 +106,7 @@ def critic(
     )
 
     # name the layer before sigmoid
-    before_clip = RescalingFixed(1.0, offset=0.3, name="before_clip")(outputs)
+    before_clip = RescalingFixed(0.1, offset=0.3, name="before_clip")(outputs)
 
     biased_normed = ClipLayer(0.0, 1.0)(before_clip)
     model = keras.Model(inputs, biased_normed)
