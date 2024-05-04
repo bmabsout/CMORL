@@ -373,6 +373,7 @@ def ddpg(
             # Log the occurrence in Weights and Biases
             weights_and_biases.log({"message": "NaN detected in action"})
             # exit(1)
+            weights_and_biases.finish()
             return
 
         # Step the env
