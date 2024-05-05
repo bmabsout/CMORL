@@ -8,16 +8,16 @@ def parse_args_and_train(args=None, p_values_list=[0, -4, 0, -4]):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=5, learning_rate=1e-2)
+    serializer = args_utils.default_serializer(epochs=10, learning_rate=1e-2)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams(
-        start_steps=1000,
+        start_steps=500,
         epochs=cmd_args.epochs,
         q_lr=cmd_args.learning_rate,
         pi_lr=cmd_args.learning_rate,
         seed=cmd_args.seed,
         max_ep_len=200,
-        steps_per_epoch=5000,
+        steps_per_epoch=1000,
         p_Q_batch=p_values_list[0],
         p_Q_objectives=p_values_list[1],
     )
@@ -38,12 +38,14 @@ if __name__ == "__main__":
     # p_values_list = p_value_sampling_analysis.sample_p_values(
     #     n_samples=50, mean=0, std=15, low=-50, high=50
     # )
-
-    p_values_to_use = [-50, -10, -1, 0, 1, 10, 50]
-    # Create p-values combinations from those values above
+    # Make all possible combinations of p_values using the following list:
+    p_values = [-50, -10, -1, 0, 1, 10, 50]
     p_values_list = []
-    for p_Q_batch in p_values_to_use:
-        for p_Q_objectives in p_values_to_use:
+    for p_Q_batch in p_values:
+        for p_Q_objectives in p_values:
             p_values_list.append([p_Q_batch, p_Q_objectives])
+    len(p_values_list)
+    print("\n\nNumber of p_values combinations: ", len(p_values_list), "\n\n")
+
     for p_values in p_values_list:
         parse_args_and_train(p_values_list=p_values)
