@@ -368,6 +368,7 @@ def ddpg(
         if t > hp.start_steps:
             a = get_action(o, hp.act_noise * (total_steps - t) / total_steps, np_random)
         else:
+            env.action_space._np_random = np_random
             a = env.action_space.sample()
 
         if np.isnan(a).any():
@@ -403,7 +404,7 @@ def ddpg(
             """
             for train_step in range(hp.train_steps):
                 batch = replay_buffer.sample_batch(hp.batch_size, np_random=np_random)
-                print(batch)
+                # print(batch)
                 # print(1, batch["obs1"])
                 obs1 = tf.constant(batch["obs1"])
                 # print(2, obs1)
