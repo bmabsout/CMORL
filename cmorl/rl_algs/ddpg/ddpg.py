@@ -322,8 +322,8 @@ def ddpg(
             all_c = p_mean([q_c, before_clip_c], p=0.0)
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
-        if debug:
-            tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
+        # if debug:
+        #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
 
         grads_and_vars = zip(grads, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
