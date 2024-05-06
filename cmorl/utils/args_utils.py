@@ -65,6 +65,14 @@ class Arg_Serializer:
 
     def remove_ignored(self, hypers: dict[str, Any]):
         return ignore_some_keys(hypers, self.ignored)
+    
+    def remove_args(self, names: set[str]):
+        clone = copy.deepcopy(self)
+        abbrevs = {self.name_to_abbrev[name] for name in names}
+        clone.name_to_abbrev = {k: v for k, v in self.name_to_abbrev.items() if k not in names}
+        clone.abbrev_to_args = {k: v for k, v in self.abbrev_to_args.items() if k not in abbrevs}
+        clone.ignored = self.ignored - names
+        return clone
 
     def get_semantic_folder_name(self, hypers: dict[str, Any]) -> str:
         return serialize_dict(self.get_minified_args_dict(self.remove_ignored(hypers)))
@@ -138,10 +146,10 @@ def default_serializer(epochs:int=50, learning_rate:float=3e-3, experiment_name=
     )
 
 
-def parse_arguments(serializer: Arg_Serializer, args=None, parser=None):
+def parse_arguments(serializer: Arg_Serializer, args=None, parser=None, namespace=None):
     if parser is None:
         parser = argparse.ArgumentParser()
     serializer.add_serialized_args_to_parser(parser)
 
-    cmd_args = parser.parse_args(args)
+    cmd_args = parser.parse_args(args, namespace=namespace)
     return cmd_args

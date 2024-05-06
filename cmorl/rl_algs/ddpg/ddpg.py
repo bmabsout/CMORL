@@ -330,7 +330,6 @@ def ddpg(
         return all_c, qs_c, q_c, before_clip_c
 
     def get_action(o, noise_scale, np_random: np.random.Generator = np.random):
-        
         minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
         noise = noise_scale * np_random.normal(size=act_dim).astype(np.float32)
         a = (minus_1_to_1 + noise) * (

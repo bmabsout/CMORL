@@ -4,12 +4,12 @@ from Pendulum import PendulumEnv
 import Pendulum
 
 
-def parse_args_and_train(args=None):
+def parse_args_and_train(**kwargs):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
     serializer = args_utils.default_serializer(epochs=20, learning_rate=1e-2)
-    cmd_args = args_utils.parse_arguments(serializer)
+    cmd_args = args_utils.parse_arguments(serializer, **kwargs)
     hp = HyperParams(
         ac_kwargs={"actor_hidden_sizes": (16, 16), "critic_hidden_sizes": (64, 64)},
         start_steps=500,
