@@ -30,7 +30,7 @@ def parse_args_and_train(args=None):
     )
     ddpg(
         env_fn,
-        experiment_description="Testing the variance with resect to p-value when composing Q-values.",
+        experiment_description="Testing the variance with respect to p-value when composing Q-values.",
         **generated_params
     )
 
