@@ -39,8 +39,8 @@ if __name__ == "__main__":
     #     n_samples=50, mean=0, std=15, low=-50, high=50
     # )
     # Make all possible combinations of p_values using the following list:
-    p_values_batch = [0, 1, 10, 50]
-    p_values_objectives = [-50, -10, -1, 0, 1, 10, 50]
+    p_values_batch = [-32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16, 32]
+    p_values_objectives = [-32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16, 32]
     p_values_list = []
     for p_Q_batch in p_values_batch:
         for p_Q_objectives in p_values_objectives:
