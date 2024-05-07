@@ -4,21 +4,19 @@ from Pendulum import PendulumEnv
 import Pendulum
 
 
-def parse_args_and_train(args=None):
+def parse_args_and_train(**kwargs):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=5, learning_rate=1e-2)
-    cmd_args = args_utils.parse_arguments(serializer)
-    hp = HyperParams(
-        start_steps=2000,
-        epochs=cmd_args.epochs,
-        q_lr=cmd_args.learning_rate,
-        pi_lr=cmd_args.learning_rate,
-        seed=cmd_args.seed,
-        max_ep_len=200,
-        steps_per_epoch=5000,
-    )
+    serializer = args_utils.default_serializer(epochs=20, learning_rate=1e-2)
+    cmd_args = args_utils.parse_arguments(serializer, **kwargs)
+    hp = HyperParams.from_cmd_args(cmd_args)
+    hp.ac_kwargs={"actor_hidden_sizes": (16, 16), "critic_hidden_sizes": (64, 64)}
+    hp.start_steps=500
+    hp.max_ep_len=400
+    hp.gamma=0.99
+    hp.steps_per_epoch=1000
+
     generated_params = train_utils.create_train_folder_and_params(
         "Pendulum-custom", hp, cmd_args, serializer
     )
@@ -27,7 +25,7 @@ def parse_args_and_train(args=None):
     )
     ddpg(
         env_fn,
-        experiment_description="Testing the variance with resect to p-value when composing Q-values.",
+        experiment_description="Testing the variance with respect to p-value when composing Q-values.",
         **generated_params
     )
 

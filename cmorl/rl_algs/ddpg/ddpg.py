@@ -10,6 +10,7 @@ import tensorflow as tf
 import gymnasium as gym
 import keras
 import signal
+import gymnasium.utils.seeding as seeding
 import wandb
 from cmorl.rl_algs.ddpg import core
 from cmorl.utils.logx import TensorflowLogger
@@ -43,8 +44,8 @@ class ReplayBuffer:
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
-    def sample_batch(self, batch_size=32):
-        idxs = np.random.randint(0, self.size, size=batch_size)
+    def sample_batch(self, batch_size=32, np_random: np.random.Generator = np.random):
+        idxs = np_random.integers(0, self.size, size=batch_size)
         return dict(
             obs1=self.obs1_buf[idxs],
             obs2=self.obs2_buf[idxs],
@@ -92,7 +93,17 @@ class HyperParams:
         self.train_steps = train_steps
         self.p_Q_batch = p_Q_batch
         self.p_Q_objectives = p_Q_objectives
-
+    @staticmethod
+    def from_cmd_args(cmd_args):
+        hp = HyperParams(
+            pi_lr=cmd_args.learning_rate,
+            q_lr=cmd_args.learning_rate
+        )
+        for key in vars(cmd_args):
+            if hasattr(hp, key):
+                setattr(hp, key, getattr(cmd_args, key))
+        return hp
+        
 
 """
 
@@ -186,9 +197,10 @@ def ddpg(
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
 
     tf.random.set_seed(hp.seed)
-    np.random.seed(hp.seed)
+    np_random, _ = seeding.np_random(hp.seed)
 
     env = env_fn()
+    env.reset(seed=hp.seed)
 
     weights_and_biases = wandb.init(
         # set the wandb project where this run will be logged
@@ -222,7 +234,7 @@ def ddpg(
     # Main outputs from computation graph
     with tf.name_scope("main"):
         pi_network, q_network = actor_critic(
-            env.observation_space, env.action_space, rew_dims, **hp.ac_kwargs
+            env.observation_space, env.action_space, rew_dims, seed=hp.seed, **hp.ac_kwargs
         )
 
         pi_and_before_clip = keras.Model(
@@ -291,7 +303,7 @@ def ddpg(
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
-            q_bellman_c = 1.0 - p_mean(tf.abs(q-backup), p=2.0)
+            q_bellman_c = 1.0 - p_mean(tf.abs(q - backup), p=2.0)
             with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
             # tf.print(q_bellman_c)
             # tf.print(with_reg)
@@ -322,13 +334,14 @@ def ddpg(
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if debug:
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
+
         grads_and_vars = zip(grads, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
         return all_c, qs_c, q_c, before_clip_c
 
-    def get_action(o, noise_scale):
+    def get_action(o, noise_scale, np_random: np.random.Generator = np.random):
         minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
-        noise = noise_scale * np.random.randn(act_dim).astype(np.float32)
+        noise = noise_scale * np_random.normal(size=act_dim).astype(np.float32)
         a = (minus_1_to_1 + noise) * (
             env.action_space.high - env.action_space.low
         ) / 2.0 + (env.action_space.high + env.action_space.low) / 2.0
@@ -362,18 +375,19 @@ def ddpg(
         use the learned policy (with some noise, via act_noise).
         """
         if t > hp.start_steps:
-
-            a = get_action(o, hp.act_noise * (total_steps - t) / total_steps)
+            a = get_action(o, hp.act_noise * (total_steps - t) / total_steps, np_random)
         else:
+            env.action_space._np_random = np_random
             a = env.action_space.sample()
 
         if np.isnan(a).any():
             # a = env.action_space.sample()
             print(f"nan detected in action {a}")
-            weights_and_biases.log({"message": "NaN detected in action"})
-            exit(1)
             # Log the occurrence in Weights and Biases
-            # return
+            weights_and_biases.log({"message": "NaN detected in action"})
+            # exit(1)
+            weights_and_biases.finish()
+            return
 
         # Step the env
         o2, r, d, _, _ = env.step(a)
@@ -398,7 +412,8 @@ def ddpg(
             in accordance with tuning done by TD3 paper authors.
             """
             for train_step in range(hp.train_steps):
-                batch = replay_buffer.sample_batch(hp.batch_size)
+                batch = replay_buffer.sample_batch(hp.batch_size, np_random=np_random)
+                # print(batch)
                 # print(1, batch["obs1"])
                 obs1 = tf.constant(batch["obs1"])
                 # print(2, obs1)
@@ -481,7 +496,6 @@ def ddpg(
             # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
-
 
     # [optional] finish the wandb run, necessary in notebooks
     weights_and_biases.finish()

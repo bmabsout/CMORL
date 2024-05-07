@@ -26,16 +26,6 @@ def composed_reward_fn(state, action, env):
     return reward
 
 
-@tf.function
-def q_composer(q_values):
-    # q1_c = q_values[0] ** 2
-    # q2_c = q_values[1]
-    # q_values = tf.stack([q1_c, q2_c], axis=0)
-    qs_c = tf.reduce_mean(q_values, axis=0)
-    q_c = p_mean(qs_c, p=-4.0)
-    return qs_c, q_c
-
-
 def sample_point_in_circle(np_random, radius, bias=0.0):
     angle = np_random.uniform() * np.pi * 2
     r = radius * np_random.uniform() ** (2.0**bias / 2.0)
@@ -163,7 +153,7 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
         ).shape[  # type: ignore
             0
         ]  # type: ignore
-        self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
+        self.cmorl = CMORL(reward_dim, reward_fn)
 
     def step(self, action):
         self.do_simulation(action, self.frame_skip)
