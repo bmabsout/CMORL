@@ -9,14 +9,13 @@ def parse_args_and_train(args=None):
 
     serializer = args_utils.default_serializer(epochs=1000, learning_rate=1e-4)
     cmd_args = args_utils.parse_arguments(serializer)
-    hp = HyperParams(
-        epochs=cmd_args.epochs,
-        q_lr=cmd_args.learning_rate,
-        pi_lr=cmd_args.learning_rate,
-        seed=cmd_args.seed,
-        max_ep_len=400,
-        steps_per_epoch=1000,
-    )
+    hp = HyperParams.from_cmd_args(cmd_args)
+    hp.ac_kwargs = { # actor-critic kwargs
+        "actor_hidden_sizes": (32, 32),
+        "critic_hidden_sizes": (256, 256),
+    }
+    hp.max_ep_len=400
+
     generated_params = train_utils.create_train_folder_and_params(
         "Ant-custom", hp, cmd_args, serializer
     )
