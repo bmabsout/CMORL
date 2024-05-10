@@ -3,7 +3,7 @@ import gymnasium
 import numpy as np
 from cmorl.utils.reward_utils import CMORL
 from cmorl.utils import test_utils
-from envs.Mujoco_forward.reward_fns import multi_dim_reward_joints
+from reward_fns import reward_fns
 
 
 def parse_args(args=None):
@@ -33,6 +33,6 @@ if __name__ == "__main__":
     runs = test_utils.run_tests(
         env,
         cmd_args,
-        cmorl=CMORL(multi_dim_reward_joints),
+        cmorl=CMORL(reward_fns[cmd_args.env_name]),
     )
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")

@@ -28,15 +28,16 @@ def parse_args_and_train(args=None):
         "critic_hidden_sizes": (512, 512),
     }
     hp.max_ep_len=400
-    hp.start_steps=10000
-
+    # hp.start_steps=10000
+    hp.start_steps=1000
+    hp.replay_size=int(1e5)
     generated_params = train_utils.create_train_folder_and_params(
         cmd_args.env_name, hp, cmd_args, forward_serializer
     )
     env_fn = lambda: gymnasium.make(cmd_args.env_name)
     ddpg(
         env_fn,
-        cmorl=CMORL(reward_fns.multi_dim_reward_joints),
+        cmorl=CMORL(reward_fns.reward_fns[cmd_args.env_name]),
         **generated_params
     )
 
