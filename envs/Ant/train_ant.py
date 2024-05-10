@@ -7,7 +7,7 @@ def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
     import cmorl.utils.args_utils as args_utils
 
-    serializer = args_utils.default_serializer(epochs=1000, learning_rate=1e-4)
+    serializer = args_utils.default_serializer(epochs=1000)#, learning_rate=1e-4)
     cmd_args = args_utils.parse_arguments(serializer)
     hp = HyperParams.from_cmd_args(cmd_args)
     hp.ac_kwargs = { # actor-critic kwargs
@@ -20,7 +20,7 @@ def parse_args_and_train(args=None):
         "Ant-custom", hp, cmd_args, serializer
     )
     env_fn = lambda: AntEnv(
-        reward_fn=ant.multi_dim_reward,
+        reward_fn=ant.multi_dim_reward_joints,
         # render_mode="human",
     )
     ddpg(

@@ -1,7 +1,9 @@
 import argparse
+import gymnasium
 import numpy as np
-from envs.HalfCheetah import half_cheetah
+from cmorl.utils.reward_utils import CMORL
 from cmorl.utils import test_utils
+from envs.Mujoco_forward.reward_fns import multi_dim_reward_joints
 
 
 def parse_args(args=None):
@@ -12,16 +14,7 @@ def parse_args(args=None):
     parser.add_argument(
         "-r", "--render", action="store_true", help="render the env as it evaluates"
     )
-    parser.add_argument(
-        "-d",
-        "--distance",
-        type=float,
-        default=0.2,
-        help="radius of points from the center",
-    )
-    parser.add_argument(
-        "-b", "--bias", type=float, default=0.0, help="bias of points from the center"
-    )
+    parser.add_argument("-env", "--env_name", type=str, default="HalfCheetah-v4")
     parser.add_argument("-n", "--num_tests", type=int, default=20)
     # group = parser.add_mutually_exclusive_group()
     parser.add_argument(
@@ -36,10 +29,10 @@ def parse_args(args=None):
 if __name__ == "__main__":
     # import matplotlib.pyplot as plt
     cmd_args = parse_args()
+    env = gymnasium.make(cmd_args.env_name, render_mode="human" if cmd_args.render else None)
     runs = test_utils.run_tests(
-        half_cheetah.HalfCheetahEnv(
-            render_mode="human" if cmd_args.render else None,
-        ),
+        env,
         cmd_args,
+        cmorl=CMORL(multi_dim_reward_joints),
     )
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")

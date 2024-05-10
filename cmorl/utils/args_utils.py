@@ -81,7 +81,7 @@ class Arg_Serializer:
         return f"trained/{experiment_name}/{self.get_semantic_folder_name(hypers)}/seeds/{hypers['seed']}"
 
 
-def rl_alg_serializer(experiment_name=None, epochs=50, learning_rate=3e-3):
+def rl_alg_serializer(experiment_name=None, epochs=50, learning_rate=3e-3, gamma=0.9):
     return Arg_Serializer(
         abbrev_to_args={
             "e": Serialized_Argument(
@@ -117,6 +117,11 @@ def rl_alg_serializer(experiment_name=None, epochs=50, learning_rate=3e-3):
                 default=experiment_name,
                 help="name of the experiment"
             ),
+            "gamma": Serialized_Argument(
+                name="--gamma",
+                type=float,
+                default=gamma
+            ),
         },
         ignored={"save_path", "seed", "replay_save", "experiment_name"},
     )
@@ -133,15 +138,15 @@ def objective_composition_serializer():
         "po": Serialized_Argument(
             name="--p_Q_objectives",
             type=float,
-            default=0.0,
+            default=-4.0,
             help="the p-mean p for composing the Q-value of the objectives together"
         ),
     }, ignored=set())
 
 
-def default_serializer(epochs:int=50, learning_rate:float=3e-3, experiment_name=None):
+def default_serializer(epochs:int=50, learning_rate:float=3e-3, experiment_name=None, gamma=0.9):
     return Arg_Serializer.join(
-        rl_alg_serializer(experiment_name=experiment_name, epochs=epochs, learning_rate=learning_rate),
+        rl_alg_serializer(experiment_name=experiment_name, epochs=epochs, learning_rate=learning_rate, gamma=gamma),
         objective_composition_serializer(),
     )
 

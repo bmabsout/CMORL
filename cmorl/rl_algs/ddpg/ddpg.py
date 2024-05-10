@@ -13,6 +13,7 @@ import signal
 import gymnasium.utils.seeding as seeding
 import wandb
 from cmorl.rl_algs.ddpg import core
+from cmorl.utils import reward_utils
 from cmorl.utils.logx import TensorflowLogger
 from cmorl.utils.loss_composition import (
     geo,
@@ -122,6 +123,7 @@ def ddpg(
     save_freq=1,
     on_save=lambda *_: (),
     experiment_description: str = None,
+    cmorl: None | reward_utils.CMORL = None,
     extra_hyperparameters: dict[str, object] = {},
 ):
     """
@@ -200,7 +202,9 @@ def ddpg(
     np_random, _ = seeding.np_random(hp.seed)
 
     env = env_fn()
-    env.reset(seed=hp.seed)
+    o, info = env.reset(seed=hp.seed)
+
+    q_composer = cmorl.q_composer if cmorl else reward_utils.default_q_composer
 
     weights_and_biases = wandb.init(
         # set the wandb project where this run will be logged
@@ -228,7 +232,7 @@ def ddpg(
     ), "only continuous action space is supported"
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
-    rew_dims = env.cmorl.dim
+    rew_dims = cmorl.calculate_space(env).shape[0] if cmorl else 1
     max_q_val = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
 
     # Main outputs from computation graph
@@ -326,7 +330,7 @@ def ddpg(
             before_clip = outputs["before_clip"]
             before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-1.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            qs_c, q_c = env.cmorl.q_composer(
+            qs_c, q_c = q_composer(
                 q_values, p_batch=hp.p_Q_batch, p_objectives=hp.p_Q_objectives
             )
             all_c = p_mean([q_c, before_clip_c], p=0.0)
@@ -384,13 +388,17 @@ def ddpg(
             # a = env.action_space.sample()
             print(f"nan detected in action {a}")
             # Log the occurrence in Weights and Biases
-            weights_and_biases.log({"message": "NaN detected in action"})
+            weights_and_biases.log({"message": "NaN detected in action"}, step=t)
             # exit(1)
             weights_and_biases.finish()
             return
 
         # Step the env
-        o2, r, d, _, _ = env.step(a)
+        o2, r, d, _, i = env.step(a)
+        
+        if cmorl:
+            r = cmorl(reward_utils.Transition(o, a, o2, d, i), env) # getting the reward before the step, since the reward is based on the previous state
+
         ep_ret += r
         ep_len += 1
 
@@ -424,9 +432,9 @@ def ddpg(
                 # Q-learning update
                 qloss_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=1.0 - qloss_c)
-                weights_and_biases.log({"Q-Loss": 1.0 - qloss_c})
+                weights_and_biases.log({"Q-Loss": 1.0 - qloss_c}, step=t)
                 logger.store(Q_before_clip_c=q_before_clip_c)
-                weights_and_biases.log({"Q-before_clip_c": q_before_clip_c})
+                weights_and_biases.log({"Q-before_clip_c": q_before_clip_c}, step=t)
                 # print(loss_q)
                 # Policy update
                 (
@@ -444,12 +452,13 @@ def ddpg(
                 )
                 weights_and_biases.log(
                     {"Q-composed": q_c, "before_clip": before_clip_c}
+                    , step=t
                 )
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
                     qs_dict_[f"Q{i}"] = q
                 logger.store(**qs_dict_)
-                weights_and_biases.log(qs_dict_)
+                weights_and_biases.log(qs_dict_, step=t)
 
                 # target update
                 target_update()
@@ -460,9 +469,9 @@ def ddpg(
             for i in range(rew_dims):
                 ret_dict_[f"EpRet_{i}"] = ep_ret[i]
             logger.store(**ret_dict_)
-            weights_and_biases.log(ret_dict_)
+            weights_and_biases.log(ret_dict_, step=t)
             logger.store(EpLen=ep_len)
-            weights_and_biases.log({"EpLen": ep_len})
+            weights_and_biases.log({"EpLen": ep_len}, step=t)
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -480,8 +489,8 @@ def ddpg(
 
             # Log info about epoch
             # logger.log_tabular("Epoch", epoch)
-            logger.log_tabular("Episode", epoch)
-            weights_and_biases.log({"Episode": epoch})
+            logger.log_tabular("Epoch", epoch)
+            weights_and_biases.log({"Epoch": epoch}, step=t)
             # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             for i in range(rew_dims):
