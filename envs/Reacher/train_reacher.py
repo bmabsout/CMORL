@@ -1,6 +1,7 @@
 from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
 from cmorl.utils import args_utils
 from cmorl.utils import train_utils
+from cmorl.utils.reward_utils import CMORL
 from envs.Reacher import reacher
 
 reacher_serializer = lambda: args_utils.Arg_Serializer.join(
@@ -43,9 +44,8 @@ def train(cmd_args, serializer):
     env_fn = lambda: reacher.ReacherEnv(
         goal_distance=cmd_args.distance,
         bias=cmd_args.bias,
-        reward_fn=reacher.multi_dim_reward,
     )
-    ddpg(env_fn, **generated_params)
+    ddpg(env_fn, cmorl=CMORL(reacher.multi_dim_reward), **generated_params)
 
 
 if __name__ == "__main__":

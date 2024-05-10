@@ -9,19 +9,19 @@ DEFAULT_CAMERA_CONFIG = {"trackbodyid": 0}
 
 import tensorflow as tf
 from cmorl.utils.loss_composition import p_mean
-from cmorl.utils.reward_utils import CMORL, RewardFnType
+from cmorl.utils.reward_utils import CMORL, RewardFnType, Transition
 
 
-def multi_dim_reward(state, action, env: "ReacherEnv"):
+def multi_dim_reward(transition: Transition, env: "ReacherEnv"):
     vec = env.get_body_com("fingertip") - env.get_body_com("target")
-    reward_performance = np.clip(1.0 - np.linalg.norm(vec) / 0.4, 0.0, 1.0) ** 2.0
-    reward_actuation = 1 - np.abs(action).sum() / 2
-    rw_vec = np.array([reward_performance**2, reward_actuation**0.5], dtype=np.float32)
+    reward_performance = np.clip(1.0 - np.linalg.norm(vec) / 0.4, 0.0, 1.0)
+    reward_actuation = 1 - np.abs(transition.action)
+    rw_vec = np.concatenate([[reward_performance], reward_actuation], dtype=np.float32)
     return rw_vec
 
 
-def composed_reward_fn(state, action, env):
-    rew_vec = multi_dim_reward(state, action, env)
+def composed_reward_fn(transition: Transition, env):
+    rew_vec = multi_dim_reward(transition, env)
     reward = p_mean(rew_vec, p=-4.0)
     return reward
 
@@ -133,7 +133,6 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
         self,
         goal_distance=0.2,
         bias=0.0,
-        reward_fn: RewardFnType = multi_dim_reward,  # type: ignore
         **kwargs
     ):
         self.goal_distance = goal_distance
@@ -148,12 +147,6 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
             # default_camera_config=DEFAULT_CAMERA_CONFIG,
             **kwargs
         )
-        reward_dim = reward_fn(
-            self.observation_space.sample(), self.action_space.sample(), self  # type: ignore
-        ).shape[  # type: ignore
-            0
-        ]  # type: ignore
-        self.cmorl = CMORL(reward_dim, reward_fn)
 
     def step(self, action):
         self.do_simulation(action, self.frame_skip)
@@ -161,10 +154,9 @@ class ReacherEnv(MujocoEnv, utils.EzPickle):
             self.render()
 
         obs = self._get_obs()
-        reward = self.cmorl(obs, action, self)
         return (
             obs,
-            reward,
+            0.0,
             False,
             False,
             # dict(reward_dist=reward_dist, reward_ctrl=reward_ctrl),

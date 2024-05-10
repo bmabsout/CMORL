@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+from cmorl.utils.reward_utils import CMORL
 from envs.Reacher import reacher
 from cmorl.utils import test_utils
 
@@ -43,5 +44,6 @@ if __name__ == "__main__":
             render_mode="human" if cmd_args.render else None,
         ),
         cmd_args,
+        cmorl=CMORL(reacher.multi_dim_reward),
     )
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")
