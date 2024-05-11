@@ -25,12 +25,12 @@ def parse_args_and_train(args=None):
     hp = HyperParams.from_cmd_args(cmd_args)
     hp.ac_kwargs = { # actor-critic kwargs
         "actor_hidden_sizes": (32, 32),
-        "critic_hidden_sizes": (512, 512),
+        "critic_hidden_sizes": (256, 256),
     }
     hp.max_ep_len=400
     # hp.start_steps=10000
-    hp.start_steps=1000
-    hp.replay_size=int(1e5)
+    # hp.start_steps=1000
+    # hp.replay_size=int(1e5)
     generated_params = train_utils.create_train_folder_and_params(
         cmd_args.env_name, hp, cmd_args, forward_serializer
     )

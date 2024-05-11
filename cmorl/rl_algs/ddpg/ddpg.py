@@ -233,7 +233,7 @@ def ddpg(
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
     rew_dims = cmorl.calculate_space(env).shape[0] if cmorl else 1
-    max_q_val = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
+    max_discounted_sum = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
 
     # Main outputs from computation graph
     with tf.name_scope("main"):
@@ -302,7 +302,7 @@ def ddpg(
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
 
             backup = tf.stop_gradient(
-                rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
+                rews / max_discounted_sum + (1 - dones) * hp.gamma * q_pi_targ
             )
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0

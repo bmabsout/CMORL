@@ -1,3 +1,4 @@
+from functools import partial
 import numpy as np
 
 from cmorl.utils.loss_composition import p_mean
@@ -34,14 +35,35 @@ def multi_dim_reacher(transition: Transition, env: ReacherEnv):
     fingertip_target_error = transition.next_state[-3:-1]
     reward_performance = np.clip(1.0 - np.linalg.norm(fingertip_target_error) / 0.4, 0.0, 1.0)
     reward_actuation = 1 - np.abs(transition.action)
-    print("reward_performance: ", reward_performance)
-    print("reward_actuation: ", reward_actuation)
     rw_vec = np.concatenate([[reward_performance], reward_actuation], dtype=np.float32)
     return rw_vec
+
+
+def normed_angular_distance(a, b):
+    diff = (b - a + np.pi) % (2 * np.pi) - np.pi
+    return np.abs(diff + 2 * np.pi if diff < -np.pi else diff) / np.pi
+
+def multi_dim_pendulum(transition: Transition, env, setpoint):
+    # check if action is an array or a scalar
+    u = np.squeeze(transition.action)
+    th, thdot = env.state  # th := theta
+    angle_rw = 1.0 - normed_angular_distance(th, setpoint)
+
+    # Normalizing the torque to be in the range [0, 1]
+    normalized_u = u / env.max_torque
+    normalized_u = abs(normalized_u)
+    actuation_rw = 1.0 - normalized_u
+    
+    # Merge the angle reward and the normalized torque into a single reward vector
+    thdot_rw = 1.0 - np.abs(thdot) / env.max_speed
+    rw_vec = np.array([angle_rw, actuation_rw], dtype=np.float32)
+    return rw_vec
+
 
 reward_fns = {
     "Ant-v4": mujoco_multi_dim_reward_joints_x_velocity,
     "HalfCheetah-v4": mujoco_multi_dim_reward_joints_x_velocity,
     "Hopper-v4": mujoco_multi_dim_reward_joints_x_velocity,
     "Reacher-v4": multi_dim_reacher,
+    "Pendulum-v1": partial(multi_dim_pendulum, setpoint=0.0),
 }
