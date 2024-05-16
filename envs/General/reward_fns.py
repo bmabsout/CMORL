@@ -1,30 +1,18 @@
-from functools import partial
 import numpy as np
 
 from cmorl.utils.loss_composition import p_mean
 from cmorl.utils.reward_utils import  Transition
-from envs.Reacher.reacher import ReacherEnv
+from gymnasium.envs.box2d.lunar_lander import LunarLander
+from gymnasium.envs.mujoco.reacher import ReacherEnv
 
-def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env):
-    action_rw = (1.0 - np.abs(transition.action)) # *0.5+0.5
-    tanhed_speed = 0.0
-    if ("x_velocity" in transition.info):
-        tanhed_speed = np.tanh(transition.info["x_velocity"])
-    else:
-        print("Warning: x_velocity not found in transition.info")
-
-    # if the forward_reward is negative, it should be scaled between 0 and 0.1
-    forward_rw = (tanhed_speed+1.0)*0.1 if tanhed_speed < 0.0 else 0.1+tanhed_speed*0.9
-    return np.hstack([[forward_rw], action_rw])
-
-def two_dim_reward(transition, env, p=0.0):
-    all_rw = mujoco_multi_dim_reward_joints_x_velocity(transition, env)
-    forward_rw = all_rw[0]
-    action_rw = all_rw[1:]
-    ctrl_reward = p_mean(action_rw, p=p)
-
-    rw_vec = np.array([forward_rw, ctrl_reward], dtype=np.float32)
-    return rw_vec
+def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env, speed_multiplier=1.0):
+    action_rw = (1.0 - np.abs(transition.action))
+    if not hasattr(env, "prev_xpos"):
+        env.prev_xpos = np.copy(env.data.xpos)
+    x_velocities = (env.data.xpos - env.prev_xpos) / env.dt
+    env.prev_xpos = np.copy(env.data.xpos)
+    forward_rw = np.clip(x_velocities[1:, 0]*speed_multiplier, 0.0, 1.0)
+    return np.hstack([forward_rw, action_rw**0.5])
 
 def composed_reward_fn(transition, env):
     rew_vec = mujoco_multi_dim_reward_joints_x_velocity(transition, env)
@@ -32,12 +20,12 @@ def composed_reward_fn(transition, env):
     return reward
 
 def multi_dim_reacher(transition: Transition, env: ReacherEnv):
-    fingertip_target_error = transition.next_state[-3:-1]
-    reward_performance = np.clip(1.0 - np.linalg.norm(fingertip_target_error) / 0.4, 0.0, 1.0)
+    reward_performance = 1.0 - np.clip(np.abs(transition.next_state[-3:-1])/0.2, 0.0, 1.0)
     reward_actuation = 1 - np.abs(transition.action)
-    rw_vec = np.concatenate([[reward_performance], reward_actuation], dtype=np.float32)
+    # print(transition.next_state[-3:-1])
+    # print("rw:", reward_performance)
+    rw_vec = np.concatenate([reward_performance**2.0, reward_actuation], dtype=np.float32)
     return rw_vec
-
 
 def normed_angular_distance(a, b):
     diff = (b - a + np.pi) % (2 * np.pi) - np.pi
@@ -59,11 +47,12 @@ def multi_dim_pendulum(transition: Transition, env, setpoint):
     rw_vec = np.array([angle_rw, actuation_rw], dtype=np.float32)
     return rw_vec
 
+def lunar_lander_rw(transition: Transition, env: LunarLander):
+    dist_x = np.clip(
+        (1.0 - 3 * np.abs(transition.next_state[0]) / env.observation_space.high[0]), 0.0, 1.0
+    )
+    dist_y = np.clip((1.0 - np.abs(transition.next_state[1]) / env.observation_space.high[1]), 0.0, 1.0)
+    first_leg = 0.1 + 0.9 * transition.next_state[6]
+    second_leg = 0.1 + 0.9 * transition.next_state[7]
 
-reward_fns = {
-    "Ant-v4": mujoco_multi_dim_reward_joints_x_velocity,
-    "HalfCheetah-v4": mujoco_multi_dim_reward_joints_x_velocity,
-    "Hopper-v4": mujoco_multi_dim_reward_joints_x_velocity,
-    "Reacher-v4": multi_dim_reacher,
-    "Pendulum-v1": partial(multi_dim_pendulum, setpoint=0.0),
-}
+    return np.array([dist_x**2, dist_y**2, first_leg**0.5, second_leg**0.5])

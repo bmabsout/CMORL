@@ -4,7 +4,6 @@ import numpy
 import hashlib
 import base64
 from typing import Any
-import copy
 from pathlib import Path
 
 class ExtraTypesEncoder(JSONEncoder):
@@ -24,7 +23,7 @@ def hash_it(s: str, length=15):
     return base64.b32encode(m.digest(int(length))).decode()[0:length]
 
 
-def serialize_leaf(o: Any) -> str:
+def serialize_leaf(k: str, o: Any) -> str:
     if type(o) == dict:
         return hash_it(json.dumps(o, sort_keys=True, cls=ExtraTypesEncoder))
     if isinstance(o, Path):
@@ -37,5 +36,6 @@ def serialize_leaf(o: Any) -> str:
     return str(o)
 
 
-def serialize_dict(args: dict) -> str:
-    return ",".join([f"{k}:{serialize_leaf(v)}" for k, v in sorted(args.items(), key=lambda kv: kv[0]) if v is not None])
+def serialize_dict(args: dict, ignored: dict, extra: dict) -> str:
+    all_args = {**args, "x": ignored}
+    return ",".join([f"{k}:{serialize_leaf(k, v)}" for k, v in sorted(all_args.items(), key=lambda kv: kv[0]) if v is not None])

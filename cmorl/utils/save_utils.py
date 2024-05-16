@@ -4,22 +4,22 @@ import os
 import time
 from keras import models, Model, config
 import pickle
-from cmorl.utils.args_utils import Arg_Serializer
+from cmorl.utils.args_utils import Arg_Serializer, get_minified_args_dict
 from pathlib import Path
 from cmorl.utils.serialization_utils import ExtraTypesEncoder
 config.enable_unsafe_deserialization()
 
 
-def save_hypers(experiment_name, hypers, cmd_args, serializer:Arg_Serializer):
+def save_hypers(experiment_name, cmd_args, serializer:Arg_Serializer):
     """ Saves the hyperparameters to a json file in the experiment folder. Uses semantic naming for the folder."""
-    all_hypers = {**vars(cmd_args), **vars(hypers)}
+    all_hypers = vars(cmd_args)
 
     save_path = Path(serializer.get_seed_folder_path(experiment_name, all_hypers), "epochs")
     semantic_name = serializer.get_semantic_folder_name(all_hypers)
     common_output_path = Path("trained", experiment_name, semantic_name)
     os.makedirs(common_output_path, exist_ok=True)
     with open(f"{common_output_path}/hypers.json", "w") as f:
-        json.dump(serializer.remove_ignored(all_hypers), f, indent=4, cls=ExtraTypesEncoder)
+        json.dump(get_minified_args_dict(serializer, vars(cmd_args), show_defaults=True), f, indent=4, cls=ExtraTypesEncoder)
     return save_path, semantic_name
 
 

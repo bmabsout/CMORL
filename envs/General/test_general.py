@@ -1,9 +1,8 @@
 import argparse
 import gymnasium
 import numpy as np
-from cmorl.utils.reward_utils import CMORL
 from cmorl.utils import test_utils
-from reward_fns import reward_fns
+from configs import env_configs, get_config
 
 
 def parse_args(args=None):
@@ -29,10 +28,11 @@ def parse_args(args=None):
 if __name__ == "__main__":
     # import matplotlib.pyplot as plt
     cmd_args = parse_args()
-    env = gymnasium.make(cmd_args.env_name, render_mode="human" if cmd_args.render else None)
+    config = get_config(cmd_args.env_name)
+    env = gymnasium.make(cmd_args.env_name, render_mode="human" if cmd_args.render else None, **config.hypers.env_args)
     runs = test_utils.run_tests(
         env,
         cmd_args,
-        cmorl=CMORL(reward_fns[cmd_args.env_name]),
+        cmorl=config.cmorl,
     )
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")

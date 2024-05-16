@@ -1,46 +1,39 @@
+import argparse
 import gymnasium
-from cmorl.rl_algs.ddpg.ddpg import ddpg, HyperParams
+import gymnasium.envs.mujoco
+import gymnasium.envs.mujoco.ant_v4
+from cmorl.rl_algs.ddpg.ddpg import ddpg
+from cmorl.rl_algs.ddpg.hyperparams import default_serializer
 from cmorl.utils import args_utils
-from cmorl.utils.reward_utils import CMORL
-import reward_fns
+from envs.General.configs import get_config
 
-forward_serializer = args_utils.Arg_Serializer.join(
-    args_utils.Arg_Serializer(
-        abbrev_to_args={
-            "env": args_utils.Serialized_Argument(
-                name="--env_name",
-                type=str,
-                default="HalfCheetah-v4",
-            ),
-        }
-    ),
-    args_utils.default_serializer(epochs=100, learning_rate=1e-2),
-)
 
 def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
-    import cmorl.utils.args_utils as args_utils
-
-    cmd_args = args_utils.parse_arguments(forward_serializer)
-    hp = HyperParams.from_cmd_args(cmd_args)
-    hp.ac_kwargs = { # actor-critic kwargs
-        "actor_hidden_sizes": (32, 32),
-        "critic_hidden_sizes": (256, 256),
-    }
-    hp.max_ep_len=400
-    # hp.start_steps=10000
-    # hp.start_steps=1000
-    # hp.replay_size=int(1e5)
-    generated_params = train_utils.create_train_folder_and_params(
-        cmd_args.env_name, hp, cmd_args, forward_serializer
+    env_name_serializer = args_utils.Arg_Serializer(
+        args_utils.Serialized_Argument(
+            name="env_name",
+            abbrev="env",
+            type=str,
+            default="HalfCheetah-v4",
+        ),
     )
-    env_fn = lambda: gymnasium.make(cmd_args.env_name)
+    env_name_parser = argparse.ArgumentParser()
+    env_name_serializer.add_serialized_args_to_parser(env_name_parser)
+    env_name_cmd, rest_of_args = env_name_parser.parse_known_args(args)
+    env_name = env_name_cmd.env_name
+    config = get_config(env_name)
+    serializer = default_serializer(hypers=config.hypers)
+    cmd_args = serializer.parse_arguments(rest_of_args)
+    generated_params = train_utils.create_train_folder_and_params(
+        env_name, cmd_args, serializer
+    )
+    env_fn = lambda: gymnasium.make(env_name, **cmd_args.env_args) 
     ddpg(
         env_fn,
-        cmorl=CMORL(reward_fns.reward_fns[cmd_args.env_name]),
+        cmorl=config.cmorl,
         **generated_params
     )
-
 
 if __name__ == "__main__":
     parse_args_and_train()
