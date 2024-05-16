@@ -130,7 +130,7 @@ def mlp_actor_critic(
     seed=42
 ) -> tuple[Model, Model]:
     if obs_normalizer is None:
-        obs_normalizer = obs_space.high * 0.0 + 1.0
+        obs_normalizer = np.zeros_like(obs_space.high) + 1.0
     obs_normalizer = np.array(obs_normalizer)
     return (
         actor(obs_space, act_space, actor_hidden_sizes, obs_normalizer, seed=seed),

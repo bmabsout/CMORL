@@ -14,10 +14,8 @@ if __name__ == "__main__":
     # )
     # Make all possible combinations of p_values using the following list:
     cmd_args = args_utils.parse_arguments(many_serializer())
-    # p_values_batch = [-32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16, 32]
-    # p_values_objectives = [-32, -16, -8, -4, -2, -1, 0, 1, 2, 4, 8, 16, 32]
-    p_values_batch = [-10, 10]
-    p_values_objectives = [-4]
+    p_values_batch = [-32, -16, -8, -4, -2, -1, -0.5, 0, 0.5, 1, 2, 4, 8, 16, 32]
+    p_values_objectives = [-32, -16, -8, -4, -2, -1, -0.5, 0, 0.5, 1, 2, 4, 8, 16, 32]
     p_values_list = list(product(p_values_batch, p_values_objectives))
 
     len(p_values_list)

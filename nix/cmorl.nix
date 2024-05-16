@@ -27,6 +27,7 @@ buildPythonPackage rec {
     rich
     pybox2d
     matplotlib
+    pylint
     # (callPackage ./pybox2d.nix {})
     # (callPackage ./stable-baselines3.nix {})
     (callPackage ./mujoco-py.nix {})

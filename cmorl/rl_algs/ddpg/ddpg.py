@@ -13,6 +13,8 @@ import signal
 import gymnasium.utils.seeding as seeding
 import wandb
 from cmorl.rl_algs.ddpg import core
+from cmorl.rl_algs.ddpg.hyperparams import HyperParams, default_hypers
+from cmorl.utils import reward_utils
 from cmorl.utils.logx import TensorflowLogger
 from cmorl.utils.loss_composition import (
     geo,
@@ -44,7 +46,7 @@ class ReplayBuffer:
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
-    def sample_batch(self, batch_size=32, np_random: np.random.Generator = np.random):
+    def sample_batch(self, batch_size=32, np_random = np.random):
         idxs = np_random.integers(0, self.size, size=batch_size)
         return dict(
             obs1=self.obs1_buf[idxs],
@@ -54,75 +56,22 @@ class ReplayBuffer:
             done=self.done_buf[idxs],
         )
 
-
-class HyperParams:
-    def __init__(
-        self,
-        ac_kwargs={"actor_hidden_sizes": (32, 32), "critic_hidden_sizes": (512, 512)},
-        seed: int = int(time.time() * 1e5) % int(1e6),
-        steps_per_epoch: int = 5000,
-        epochs: int = 100,
-        replay_size: int = int(1e6),
-        gamma: float = 0.9,
-        polyak: float = 0.995,
-        pi_lr: float = 1e-2,
-        q_lr: float = 1e-2,
-        batch_size: int = 100,
-        start_steps: int = 10000,
-        act_noise: float = 0.1,
-        max_ep_len: int = 1000,
-        train_every: int = 50,
-        train_steps: int = 30,
-        p_Q_batch: float = 0.0,
-        p_Q_objectives: float = 0.0,
-    ):
-        self.ac_kwargs = ac_kwargs
-        self.seed = seed
-        self.steps_per_epoch = steps_per_epoch
-        self.epochs = epochs
-        self.replay_size = replay_size
-        self.gamma = gamma
-        self.polyak = polyak
-        self.pi_lr = pi_lr
-        self.q_lr = q_lr
-        self.batch_size = batch_size
-        self.start_steps = start_steps
-        self.act_noise = act_noise
-        self.max_ep_len = max_ep_len
-        self.train_every = train_every
-        self.train_steps = train_steps
-        self.p_Q_batch = p_Q_batch
-        self.p_Q_objectives = p_Q_objectives
-    @staticmethod
-    def from_cmd_args(cmd_args):
-        hp = HyperParams(
-            pi_lr=cmd_args.learning_rate,
-            q_lr=cmd_args.learning_rate
-        )
-        for key in vars(cmd_args):
-            if hasattr(hp, key):
-                setattr(hp, key, getattr(cmd_args, key))
-        return hp
-        
-
 """
 
 Deep Deterministic Policy Gradient (DDPG)
 
 """
-
-
 def ddpg(
-    env_fn: Callable[[], gym.Env],
-    env_name: str = None,
+    env_fn: Callable[[], gym.Env[gym.spaces.Box, gym.spaces.Box]],
+    env_name: str | None = None,
     experiment_name: str = str(time.time()),
-    hp: HyperParams = HyperParams(),
+    hp: HyperParams = default_hypers(),
     actor_critic=core.mlp_actor_critic,
     logger_kwargs=dict(),
     save_freq=1,
     on_save=lambda *_: (),
-    experiment_description: str = None,
-    extra_hyperparameters: dict[str, object] = {},
+    experiment_description: str | None = None,
+    cmorl: None | reward_utils.CMORL = None,
 ):
     """
 
@@ -147,49 +96,18 @@ def ddpg(
                                            | q(x, pi(x)).
             ===========  ================  ======================================
 
-        ac_kwargs (dict): Any kwargs appropriate for the actor_critic
-            function you provided to DDPG.
-
-        seed (int): Seed for random number generators.
-
-        steps_per_epoch (int): Number of steps of interaction (state-action pairs)
-            for the agent and the environment in each epoch.
-
-        epochs (int): Number of epochs to run and train agent.
-
-        replay_size (int): Maximum length of replay buffer.
-
-        gamma (float): Discount factor. (Always between 0 and 1.)
-
-        polyak (float): Interpolation factor in polyak averaging for target
-            networks. Target networks are updated towards main networks
-            according to:
-
-            .. math:: \\theta_{\\text{targ}} \\leftarrow
-                \\rho \\theta_{\\text{targ}} + (1-\\rho) \\theta
-
-            where :math:`\\rho` is polyak. (Always between 0 and 1, usually
-            close to 1.)
-
-        pi_lr (float): Learning rate for policy.
-
-        q_lr (float): Learning rate for Q-networks.
-
-        batch_size (int): Minibatch size for SGD.
-
-        start_steps (int): Number of steps for uniform-random action selection,
-            before running real policy. Helps exploration.
-
-        act_noise (float): Stddev for Gaussian exploration noise added to
-            policy at training time. (At test time, no noise is added.)
-
-        max_ep_len (int): Maximum length of trajectory / episode / rollout.
+        hp (HyperParams): The hyperparameters for the experiment.
 
         logger_kwargs (dict): Keyword args for EpochLogger.
 
         save_freq (int): How often (in terms of gap between epochs) to save
             the current policy and value function.
 
+        on_save (callable): A function that is called after the model is saved.
+
+        experiment_description (str): A description of the experiment.
+
+        cmorl (CMORL): A class that defines the reward function and the q-composer.
     """
     # start a new wandb run to track this script
 
@@ -200,7 +118,8 @@ def ddpg(
     np_random, _ = seeding.np_random(hp.seed)
 
     env = env_fn()
-    env.reset(seed=hp.seed)
+    o, info = env.reset(seed=hp.seed)
+    q_composer = reward_utils.default_q_composer if cmorl is None else cmorl.q_composer
 
     weights_and_biases = wandb.init(
         # set the wandb project where this run will be logged
@@ -228,8 +147,8 @@ def ddpg(
     ), "only continuous action space is supported"
     obs_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
-    rew_dims = env.cmorl.dim
-    max_q_val = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
+    rew_dims = cmorl.calculate_space(env).shape[0] if cmorl else 1
+    max_discounted_sum = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
 
     # Main outputs from computation graph
     with tf.name_scope("main"):
@@ -298,7 +217,7 @@ def ddpg(
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
 
             backup = tf.stop_gradient(
-                rews / max_q_val + (1 - dones) * hp.gamma * q_pi_targ
+                rews / max_discounted_sum + (1 - dones) * hp.gamma * q_pi_targ
             )
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
@@ -326,7 +245,7 @@ def ddpg(
             before_clip = outputs["before_clip"]
             before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-1.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            qs_c, q_c = env.cmorl.q_composer(
+            qs_c, q_c = q_composer(
                 q_values, p_batch=hp.p_Q_batch, p_objectives=hp.p_Q_objectives
             )
             all_c = p_mean([q_c, before_clip_c], p=0.0)
@@ -384,13 +303,17 @@ def ddpg(
             # a = env.action_space.sample()
             print(f"nan detected in action {a}")
             # Log the occurrence in Weights and Biases
-            weights_and_biases.log({"message": "NaN detected in action"})
+            weights_and_biases.log({"message": "NaN detected in action"}, step=t)
             # exit(1)
             weights_and_biases.finish()
             return
 
         # Step the env
-        o2, r, d, _, _ = env.step(a)
+        o2, r, d, _, i = env.step(a)
+        
+        if cmorl:
+            r = cmorl(reward_utils.Transition(o, a, o2, d, i), env) # getting the reward before the step, since the reward is based on the previous state
+
         ep_ret += r
         ep_len += 1
 
@@ -424,9 +347,9 @@ def ddpg(
                 # Q-learning update
                 qloss_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones)
                 logger.store(LossQ=1.0 - qloss_c)
-                weights_and_biases.log({"Q-Loss": 1.0 - qloss_c})
+                weights_and_biases.log({"Q-Loss": 1.0 - qloss_c}, step=t)
                 logger.store(Q_before_clip_c=q_before_clip_c)
-                weights_and_biases.log({"Q-before_clip_c": q_before_clip_c})
+                weights_and_biases.log({"Q-before_clip_c": q_before_clip_c}, step=t)
                 # print(loss_q)
                 # Policy update
                 (
@@ -444,12 +367,13 @@ def ddpg(
                 )
                 weights_and_biases.log(
                     {"Q-composed": q_c, "before_clip": before_clip_c}
+                    , step=t
                 )
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
                     qs_dict_[f"Q{i}"] = q
                 logger.store(**qs_dict_)
-                weights_and_biases.log(qs_dict_)
+                weights_and_biases.log(qs_dict_, step=t)
 
                 # target update
                 target_update()
@@ -460,9 +384,9 @@ def ddpg(
             for i in range(rew_dims):
                 ret_dict_[f"EpRet_{i}"] = ep_ret[i]
             logger.store(**ret_dict_)
-            weights_and_biases.log(ret_dict_)
+            weights_and_biases.log(ret_dict_, step=t)
             logger.store(EpLen=ep_len)
-            weights_and_biases.log({"EpLen": ep_len})
+            weights_and_biases.log({"EpLen": ep_len}, step=t)
             o, i = env.reset()
             r, d, ep_ret, ep_len = 0, False, 0, 0
 
@@ -480,8 +404,8 @@ def ddpg(
 
             # Log info about epoch
             # logger.log_tabular("Epoch", epoch)
-            logger.log_tabular("Episode", epoch)
-            weights_and_biases.log({"Episode": epoch})
+            logger.log_tabular("Epoch", epoch)
+            weights_and_biases.log({"Epoch": epoch}, step=t)
             # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             for i in range(rew_dims):
@@ -490,7 +414,7 @@ def ddpg(
             logger.log_tabular("TotalEnvInteracts", t)
             # logger.log_tabular("before_clip", average_only=True)
             # logger.log_tabular("Qs", average_only=True)
-            for i in range(rew_dims):
+            for i in range(qs_c.shape[0]):
                 logger.log_tabular(f"Q{i}", average_only=True)
             logger.log_tabular("Q_comp", average_only=True)
             # logger.log_tabular("All", average_only=True)
@@ -503,31 +427,6 @@ def ddpg(
     return pi_network
 
 
-def parse_args_and_train(args=None):
-    import cmorl.utils.train_utils as train_utils
-    import cmorl.utils.args_utils as args_utils
-
-    serializer = args_utils.Arg_Serializer.join(
-        args_utils.Arg_Serializer(
-            {
-                "g": args_utils.Serialized_Argument(
-                    name="--gym_env", type=str, required=True
-                )
-            },
-            ignored={"gym_env"},
-        ),
-        args_utils.default_serializer(),
-    )
-    cmd_args = args_utils.parse_arguments(serializer)
-    hp = HyperParams(
-        q_lr=cmd_args.learning_rate, pi_lr=cmd_args.learning_rate, seed=cmd_args.seed
-    )
-    generated_params = train_utils.create_train_folder_and_params(
-        hp, cmd_args, serializer
-    )
-    env_fn = lambda: gym.make(cmd_args.gym_env)
-    ddpg(env_fn, **generated_params)
-
-
 if __name__ == "__main__":
+    from envs.General.train_general import parse_args_and_train
     parse_args_and_train()

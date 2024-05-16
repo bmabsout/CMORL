@@ -1,7 +1,7 @@
 import numpy as np
-from Pendulum import PendulumEnv
+import Pendulum
 import argparse
-from cmorl.utils import test_utils
+from cmorl.utils import test_utils, reward_utils
 
 
 def parse_args(args=None):
@@ -28,6 +28,6 @@ if __name__ == "__main__":
     cmd_args = parse_args()
     cmd_args.steps = 100
     runs = test_utils.run_tests(
-        PendulumEnv(render_mode="human" if cmd_args.render else None), cmd_args
+        Pendulum.PendulumEnv(render_mode="human" if cmd_args.render else None), cmd_args, cmorl=reward_utils.CMORL(Pendulum.multi_dim_reward)
     )
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")
