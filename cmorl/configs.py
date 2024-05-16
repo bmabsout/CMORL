@@ -1,14 +1,24 @@
 from functools import partial
 
+import gymnasium
+
 from cmorl.rl_algs.ddpg.hyperparams import HyperParams
 from cmorl.utils.reward_utils import CMORL
-from envs.LunarLander.lunar_lander import LunarLander
-import reward_fns
+from cmorl import reward_fns
 
 class Config:
-    def __init__(self, cmorl: CMORL | None = None, hypers: HyperParams = HyperParams()):
+    def __init__(self, cmorl: CMORL | None = None, hypers: HyperParams = HyperParams(), wrapper = gymnasium.Wrapper):
         self.cmorl = cmorl
         self.hypers = hypers
+        self.wrapper = wrapper
+
+class FixSleepingLander(gymnasium.Wrapper):
+    def step(self, action):
+        obs, reward, done, truncated, info = self.env.step(action)
+        if not self.env.lander.awake:
+            truncated = True
+            done = False
+        return obs, reward, done, truncated, info
 
 env_configs: dict[str, Config] = {
     "Reacher-v4": Config(
@@ -38,15 +48,17 @@ env_configs: dict[str, Config] = {
         CMORL(reward_fns.lunar_lander_rw),
         HyperParams(
             ac_kwargs={
-                "obs_normalizer": LunarLander().observation_space.high
+                "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high # type: ignore
             },
             gamma=0.99,
-            max_ep_len=300,
-            epochs=60,
-            pi_lr=1e-4,
-            q_lr=1e-4,
-            p_Q_batch=1.0,
+            max_ep_len=1000,
+            epochs=100,
+            pi_lr=1e-3,
+            q_lr=1e-3,
+            p_Q_objectives=0.5,
+            p_Q_batch=0.5,
         ),
+        wrapper=FixSleepingLander,
     ),
 }
 

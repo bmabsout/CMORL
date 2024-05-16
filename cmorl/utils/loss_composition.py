@@ -1,4 +1,4 @@
-import tensorflow as tf
+import tensorflow as tf # type: ignore
 import numpy as np
 
 
@@ -56,11 +56,13 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype
     
     stabilizer = tf.reduce_min(l) if p < 1.0 else tf.reduce_max(l)
     stabilized_l = l/stabilizer # stabilize the values to prevent overflow or underflow
-    
 
-    return tf.cond(tf.reduce_prod(tf.shape(l)) == 0 # condition if an empty array is fed in
+    p_meaned = tf.cond(tf.reduce_prod(tf.shape(l)) == 0 # condition if an empty array is fed in
         , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(l), axis)) if axis else default_val
         , lambda: (tf.reduce_mean(stabilized_l**p, axis=axis))**(1.0/p) - slack)*stabilizer
+    
+    clip_t = tf.clip_by_value(p_meaned, 0.0, tf.reduce_max(l)) # prevent negative outputs
+    return p_meaned + tf.stop_gradient(clip_t - p_meaned)
 
 # @tf.custom_gradient
 # def fixed_grad_p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None, dtype=tf.float64):

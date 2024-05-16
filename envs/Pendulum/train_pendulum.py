@@ -1,6 +1,6 @@
 from cmorl.rl_algs.ddpg.hyperparams import default_serializer, HyperParams
 import cmorl.utils.train_utils as train_utils
-from cmorl.utils.reward_utils import CMORL, esr_q_composer
+from cmorl.utils.reward_utils import CMORL
 from cmorl.rl_algs.ddpg.ddpg import ddpg
 import Pendulum
 
@@ -27,7 +27,7 @@ def parse_args_and_train(**kwargs):
     ddpg(
         env_fn,
         experiment_description="Testing the variance with respect to p-value when composing Q-values.",
-        cmorl=CMORL(Pendulum.multi_dim_reward, q_composer=esr_q_composer),
+        cmorl=CMORL(Pendulum.multi_dim_reward),
         **generated_params
     )
 

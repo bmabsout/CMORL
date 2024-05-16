@@ -47,19 +47,8 @@ def folder_to_results(env, render, num_tests, folder_path, steps=400, cmorl=None
     return runs
 
 
-def run_tests(env, cmd_args, cmorl=None):
+def run_tests(env, cmd_args, folders = [], cmorl=None):
     print(cmd_args.save_folders)
-    if cmd_args.use_latest:
-        folders = [
-            save_utils.latest_train_folder(folder) for folder in cmd_args.save_folders
-        ]
-    else:
-        folders = save_utils.concatenate_lists(
-            [
-                save_utils.find_all_train_paths(folder)
-                for folder in cmd_args.save_folders
-            ]
-        )
     print("################################")
     print("################################")
     print("################################")

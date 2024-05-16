@@ -5,7 +5,7 @@ import gymnasium.envs.mujoco.ant_v4
 from cmorl.rl_algs.ddpg.ddpg import ddpg
 from cmorl.rl_algs.ddpg.hyperparams import default_serializer
 from cmorl.utils import args_utils
-from envs.General.configs import get_config
+from cmorl.configs import get_config
 
 
 def parse_args_and_train(args=None):
@@ -15,7 +15,7 @@ def parse_args_and_train(args=None):
             name="env_name",
             abbrev="env",
             type=str,
-            default="HalfCheetah-v4",
+            required=True,
         ),
     )
     env_name_parser = argparse.ArgumentParser()
@@ -28,7 +28,7 @@ def parse_args_and_train(args=None):
     generated_params = train_utils.create_train_folder_and_params(
         env_name, cmd_args, serializer
     )
-    env_fn = lambda: gymnasium.make(env_name, **cmd_args.env_args) 
+    env_fn = lambda: config.wrapper(gymnasium.make(env_name, **cmd_args.env_args))
     ddpg(
         env_fn,
         cmorl=config.cmorl,

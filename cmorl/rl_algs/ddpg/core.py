@@ -1,9 +1,9 @@
 import numpy as np
-from keras import Model
-from keras.layers import Dense, Input, Rescaling, Activation
+from keras import Model # type: ignore
+from keras.layers import Dense, Input, Rescaling, Activation # type: ignore
 from gymnasium import spaces
 import keras
-import tensorflow as tf
+import tensorflow as tf # type: ignore
 
 
 

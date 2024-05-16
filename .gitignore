@@ -1,3 +1,6 @@
+# nix stuff
+.direnv/
+
 experiments/
 trained/
 logs/

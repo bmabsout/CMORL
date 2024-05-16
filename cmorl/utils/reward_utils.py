@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, TypeVar
 import numpy as np
 import gymnasium as gym
 from typing import TypeAlias
 
-import tensorflow as tf
+import tensorflow as tf # type: ignore
 from cmorl.utils.loss_composition import p_mean
 
 @dataclass
@@ -23,9 +23,9 @@ def random_transition(env: gym.Env):
         done=False,
         info={}
     )
-    
 
-RewardFnType: TypeAlias = Callable[[Transition], float|np.ndarray]
+EnvType = TypeVar('EnvType', bound=gym.Env)
+RewardFnType: TypeAlias = Callable[[Transition, EnvType], float|np.ndarray]
 
 @tf.function
 def default_q_composer(q_values, p_batch=0, p_objectives=-4.0, scalarize_batch_first=True):
@@ -35,11 +35,11 @@ def default_q_composer(q_values, p_batch=0, p_objectives=-4.0, scalarize_batch_f
     q_c = p_mean(qs_c, p=p_objectives if scalarize_batch_first else p_batch)
     return qs_c, q_c
 
-@dataclass
 class CMORL:
-    reward_fn: RewardFnType
-    q_composer: Callable = default_q_composer
-    shape: int = None
+    def __init__(self, reward_fn: RewardFnType, q_composer: Callable = default_q_composer, shape: int | None = None):
+        self.reward_fn = reward_fn
+        self.q_composer = q_composer
+        self.shape = shape
 
     def calculate_space(self, env):
         if self.shape is not None:

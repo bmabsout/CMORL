@@ -6,9 +6,9 @@
 import time
 from typing import Callable
 import numpy as np
-import tensorflow as tf
+import tensorflow as tf # type: ignore
 import gymnasium as gym
-import keras
+import keras # type: ignore
 import signal
 import gymnasium.utils.seeding as seeding
 import wandb
@@ -282,8 +282,8 @@ def ddpg(
         return sum_step_return / n
 
     start_time = time.time()
-    o, _ = env.reset()
-    d, ep_ret, ep_len = False, 0.0, 0
+    o, info = env.reset()
+    done, ep_ret, ep_len = False, 0.0, 0
     total_steps = hp.steps_per_epoch * hp.epochs
 
     # Main loop: collect experience in env and update/log each epoch
@@ -294,14 +294,14 @@ def ddpg(
         use the learned policy (with some noise, via act_noise).
         """
         if t > hp.start_steps:
-            a = get_action(o, hp.act_noise * (total_steps - t) / total_steps, np_random)
+            action = get_action(o, hp.act_noise * (total_steps - t) / total_steps, np_random)
         else:
             env.action_space._np_random = np_random
-            a = env.action_space.sample()
+            action = env.action_space.sample()
 
-        if np.isnan(a).any():
+        if np.isnan(action).any():
             # a = env.action_space.sample()
-            print(f"nan detected in action {a}")
+            print(f"nan detected in action {action}")
             # Log the occurrence in Weights and Biases
             weights_and_biases.log({"message": "NaN detected in action"}, step=t)
             # exit(1)
@@ -309,21 +309,22 @@ def ddpg(
             return
 
         # Step the env
-        o2, r, d, _, i = env.step(a)
+        o2, reward, done, truncated, info = env.step(action)
         
         if cmorl:
-            r = cmorl(reward_utils.Transition(o, a, o2, d, i), env) # getting the reward before the step, since the reward is based on the previous state
+            reward = cmorl(reward_utils.Transition(o, action, o2, done, info), env) # getting the reward before the step, since the reward is based on the previous state
 
-        ep_ret += r
+        ep_ret += reward
         ep_len += 1
 
         # Ignore the "done" signal if it comes from hitting the time
         # horizon (that is, when it's an artificial terminal signal
         # that isn't based on the agent's state)
-        d = False if ep_len == hp.max_ep_len else d
+        truncated = truncated or ep_len == hp.max_ep_len
+        done = done and not truncated
 
         # Store experience to replay buffer
-        replay_buffer.store(o, a, r, o2, d)
+        replay_buffer.store(o, action, reward, o2, done)
 
         # Super critical, easy to overlook step: make sure to update
         # most recent observation!
@@ -336,10 +337,7 @@ def ddpg(
             """
             for train_step in range(hp.train_steps):
                 batch = replay_buffer.sample_batch(hp.batch_size, np_random=np_random)
-                # print(batch)
-                # print(1, batch["obs1"])
                 obs1 = tf.constant(batch["obs1"])
-                # print(2, obs1)
                 obs2 = tf.constant(batch["obs2"])
                 acts = tf.constant(batch["acts"])
                 rews = tf.constant(batch["rews"])
@@ -350,7 +348,6 @@ def ddpg(
                 weights_and_biases.log({"Q-Loss": 1.0 - qloss_c}, step=t)
                 logger.store(Q_before_clip_c=q_before_clip_c)
                 weights_and_biases.log({"Q-before_clip_c": q_before_clip_c}, step=t)
-                # print(loss_q)
                 # Policy update
                 (
                     all_c,
@@ -361,13 +358,12 @@ def ddpg(
 
                 qs_c = qs_c.numpy()
                 logger.store(
-                    # All=all_c,
                     Q_comp=q_c,
                     before_clip=before_clip_c,
                 )
                 weights_and_biases.log(
-                    {"Q-composed": q_c, "before_clip": before_clip_c}
-                    , step=t
+                    {"Q-composed": q_c, "before_clip": before_clip_c},
+                    step=t
                 )
                 qs_dict_ = {}
                 for i, q in enumerate(qs_c):
@@ -378,7 +374,7 @@ def ddpg(
                 # target update
                 target_update()
 
-        if d or (ep_len == hp.max_ep_len):
+        if done or truncated:
             # print(ep_ret)
             ret_dict_ = {}
             for i in range(rew_dims):
@@ -388,7 +384,7 @@ def ddpg(
             logger.store(EpLen=ep_len)
             weights_and_biases.log({"EpLen": ep_len}, step=t)
             o, i = env.reset()
-            r, d, ep_ret, ep_len = 0, False, 0, 0
+            reward, done, ep_ret, ep_len = 0, False, 0, 0
 
         # End of epoch wrap-up
         if t > hp.start_steps and t % hp.steps_per_epoch == 0:
@@ -403,10 +399,8 @@ def ddpg(
             # test_agent()
 
             # Log info about epoch
-            # logger.log_tabular("Epoch", epoch)
             logger.log_tabular("Epoch", epoch)
             weights_and_biases.log({"Epoch": epoch}, step=t)
-            # logger.log_tabular("EpRet", average_only=True)
             logger.log_tabular("EpLen", average_only=True)
             for i in range(rew_dims):
                 logger.log_tabular(f"EpRet_{i}", average_only=True)
@@ -425,8 +419,3 @@ def ddpg(
     weights_and_biases.finish()
 
     return pi_network
-
-
-if __name__ == "__main__":
-    from envs.General.train_general import parse_args_and_train
-    parse_args_and_train()

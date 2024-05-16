@@ -1,9 +1,9 @@
-from cmorl.utils import args_utils
+from cmorl.rl_algs.ddpg.hyperparams import HyperParams, default_serializer
 from itertools import product
-import train_pendulum
+from . import train_pendulum
 
-def many_serializer(epochs=20, learning_rate=1e-2):
-    return args_utils.default_serializer(epochs=epochs, learning_rate=learning_rate).remove_args({
+def many_serializer():
+    return default_serializer(hypers=HyperParams(epochs = 20, pi_lr=1e-2, q_lr=1e-2)).remove_names({
         "p_Q_batch",
         "p_Q_objectives",
     })
@@ -13,7 +13,8 @@ if __name__ == "__main__":
     #     n_samples=50, mean=0, std=15, low=-50, high=50
     # )
     # Make all possible combinations of p_values using the following list:
-    cmd_args = args_utils.parse_arguments(many_serializer())
+    serializer = many_serializer()
+    cmd_args = serializer.parse_arguments()
     p_values_batch = [-32, -16, -8, -4, -2, -1, -0.5, 0, 0.5, 1, 2, 4, 8, 16, 32]
     p_values_objectives = [-32, -16, -8, -4, -2, -1, -0.5, 0, 0.5, 1, 2, 4, 8, 16, 32]
     p_values_list = list(product(p_values_batch, p_values_objectives))

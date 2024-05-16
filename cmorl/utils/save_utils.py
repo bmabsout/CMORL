@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 import time
-from keras import models, Model, config
+from keras import models, Model, config # type: ignore
 import pickle
 from cmorl.utils.args_utils import Arg_Serializer, get_minified_args_dict
 from pathlib import Path
@@ -31,7 +31,7 @@ def get_last_epoch_path_for_each_seed_folder(path):
     return [latest_subdir(str(d)) for d in Path(path).glob('seeds/*/epochs/')]
 
 
-def find_files(dirname, name_to_find) -> list[str]:
+def find_files(dirname, name_to_find) -> list[Path]:
     files_with_the_right_name = []
     for dir_entry in os.scandir(dirname):
         if dir_entry.is_dir():

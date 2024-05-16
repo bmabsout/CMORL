@@ -1,5 +1,5 @@
 from os.path import join, dirname, realpath
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages # type: ignore
 import sys
 
 setup(
