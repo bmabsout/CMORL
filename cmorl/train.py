@@ -8,19 +8,16 @@ from cmorl.utils import args_utils
 from cmorl.configs import get_config
 
 
+def parse_env_name(args=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "env_name", type=str, help="environment name (used in gym.make)"
+    )
+    return parser.parse_known_args(args)
+
 def parse_args_and_train(args=None):
     import cmorl.utils.train_utils as train_utils
-    env_name_serializer = args_utils.Arg_Serializer(
-        args_utils.Serialized_Argument(
-            name="env_name",
-            abbrev="env",
-            type=str,
-            required=True,
-        ),
-    )
-    env_name_parser = argparse.ArgumentParser()
-    env_name_serializer.add_serialized_args_to_parser(env_name_parser)
-    env_name_cmd, rest_of_args = env_name_parser.parse_known_args(args)
+    env_name_cmd, rest_of_args = parse_env_name()
     env_name = env_name_cmd.env_name
     config = get_config(env_name)
     serializer = default_serializer(hypers=config.hypers)
