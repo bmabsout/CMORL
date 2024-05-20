@@ -19,9 +19,9 @@
         (system: f system (import nixpkgs {
           inherit system;
           overlays=[nixgl.overlay];
-          config.cudaSupport = true;
+         # config.cudaSupport = true;
           config.allowUnfree = true;
-          config.cudaCapabilities = [ "8.6" ];
+        #  config.cudaCapabilities = [ "8.6" ];
         }));
       
     in

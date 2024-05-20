@@ -165,7 +165,7 @@ def ddpg(
     rew_dims = cmorl.calculate_space(env).shape[0] if cmorl else 1
     max_discounted_sum = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
     discounted_sum_stds = np.ones((rew_dims))
-
+    # mean_q_values
     # Main outputs from computation graph
     with tf.name_scope("main"):
         pi_network, q_network = actor_critic(
@@ -238,10 +238,10 @@ def ddpg(
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
-            # q_bellman_c = 1.0 - p_mean(tf.abs(q - backup), p=2.0)
-            q_bellman_batch = p_mean( tf.abs(q - backup), p=4.0, axis=0, dtype=tf.float32)
+            q_bellman_c = 1.0 - p_mean(tf.abs(q - backup), p=2.0)
+            # q_bellman_batch = p_mean( tf.abs(q - backup), p=4.0, axis=0, dtype=tf.float32)
             # q_bellman_c = p_mean(1.0 - 0.01*q_bellman_batch/tf.maximum(0.01, rw_std), p=0.0)
-            q_bellman_c = p_mean(1.0 - q_bellman_batch, p=-4.0)
+            # q_bellman_c = p_mean(1.0 - q_bellman_batch, p=-4.0)
             with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
             # tf.print(q_bellman_c)
             # tf.print(with_reg)
