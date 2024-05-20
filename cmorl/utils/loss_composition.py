@@ -61,7 +61,7 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype
         , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(l), axis)) if axis else default_val
         , lambda: (tf.reduce_mean(stabilized_l**p, axis=axis))**(1.0/p) - slack)*stabilizer
     
-    clip_t = tf.clip_by_value(p_meaned, 0.0, tf.reduce_max(l)) # prevent negative outputs
+    clip_t = tf.clip_by_value(p_meaned, tf.reduce_min(slack), tf.reduce_max(l-slack)) # prevent negative outputs
     return p_meaned + tf.stop_gradient(clip_t - p_meaned)
 
 # @tf.custom_gradient
@@ -123,19 +123,19 @@ def move_towards_range(x, min, max):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     with tf.GradientTape() as gt:
-        samples = 100
-        x = tf.Variable(tf.linspace(0.1, 1.0, samples)**5.0)
-        randos = tf.broadcast_to(tf.expand_dims(np.random.rand(50)**5.0, 1), (50, samples))
-        a = tf.concat([tf.cast(tf.expand_dims(x, 0), tf.float64), tf.cast(randos, tf.float64)], 0)
-        y = p_mean(a, -10.0, axis=0)
-        print(x.shape)
-        print(y.shape)
-    #     x = tf.Variable(tf.linspace(-2.0, 2.0, 100))
-    #     y = move_towards_range(x, 0.0, 1.0)
+        # samples = 100
+        # x = tf.Variable(tf.linspace(0.1, 1.0, samples)**5.0)
+        # randos = tf.broadcast_to(tf.expand_dims(np.random.rand(50)**5.0, 1), (50, samples))
+        # a = tf.concat([tf.cast(tf.expand_dims(x, 0), tf.float64), tf.cast(randos, tf.float64)], 0)
+        # y = p_mean(a, -10.0, axis=0)
+        # print(x.shape)
+        # print(y.shape)
+        x = tf.Variable(tf.linspace(-2.0, 2.0, 100))
+        y = move_towards_range(x, 0.0, 1.0)
 
     plt.plot(x, gt.gradient(y,x), label="grad")
     plt.plot(x, y, label="y")
-    plt.plot(x, np.min(a, axis=0), label="min")
-    plt.plot(x, np.max(a, axis=0), label="max")
+    # plt.plot(x, np.min(a, axis=0), label="min")
+    # plt.plot(x, np.max(a, axis=0), label="max")
     plt.legend()
     plt.show()

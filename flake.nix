@@ -19,20 +19,20 @@
         (system: f system (import nixpkgs {
           inherit system;
           overlays=[nixgl.overlay];
-          #config.cudaSupport = true;
+          config.cudaSupport = true;
           config.allowUnfree = true;
-          # config.cudaCapabilities = [ "8.6" ];
+          config.cudaCapabilities = [ "8.6" ];
         }));
       
     in
     {
       # enter this python environment by executing `nix shell .`
       devShell = forAllSystems (system: pkgs:
-        let python = pkgs.python3.override {
+        let python = pkgs.python311.override {
               packageOverrides = (self: super: {
                 # torch = throw "lesh";
-                tensorflow = super.tensorflow-bin;
-                torch = super.torch-bin;
+                # tensorflow = super.tensorflow-bin;
+                #torch = super.torch-bin;
               });
             };
             cmorl = python.pkgs.callPackage ./nix/cmorl.nix {python3Packages = python.pkgs;};

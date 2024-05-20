@@ -17,7 +17,7 @@ buildPythonPackage rec {
     matplotlib
     # (callPackage ./wandb.nix {})
     # (wandb.override {protobuf = depFromTensorflow "protobuf";})
-    (wandb.overrideAttrs (old: {doCheck = false;}))
+    #(wandb.overrideAttrs (old: {doCheck = false;}))
     # wandb
     gymnasium
     tensorflow

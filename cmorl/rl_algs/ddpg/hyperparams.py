@@ -3,6 +3,7 @@ from functools import reduce
 from pathlib import Path
 import time
 from argparse import Namespace
+import tensorflow as tf
 
 from cmorl.utils.args_utils import Arg_Serializer, Serialized_Argument, namespace_serializer
 
@@ -23,9 +24,10 @@ class HyperParams(Namespace):
     max_ep_len     : int
     train_every    : int
     train_steps    : int
-    p_Q_batch      : float
-    p_Q_objectives : float
+    p_batch        : float
+    p_objectives   : float
     env_args       : dict[str, object] = {}
+    # noise_schedule : tf.keras.optimizers.schedules.LearningRateSchedule
 
 
 descriptions: dict[str,  str] = {
@@ -45,8 +47,8 @@ descriptions: dict[str,  str] = {
     "max_ep_len": "Maximum length of an episode",
     "train_every": "Number of steps to wait before training",
     "train_steps": "Number of training steps to take",
-    "p_Q_batch": "The p-value for composing the Q-values across the batch",
-    "p_Q_objectives": "The p-value for composing the Q-values across the objectives"
+    "p_batch": "The p-value for composing the Q-values across the batch",
+    "p_objectives": "The p-value for composing the Q-values across the objectives"
 }
 
 abbreviations = {
@@ -54,8 +56,8 @@ abbreviations = {
     "seed": "s",
     "epochs": "e",
     "gamma": "g",
-    "p_Q_batch": "p_b",
-    "p_Q_objectives": "p_o"
+    "p_batch": "p_b",
+    "p_objectives": "p_o"
 }
 
 def default_hypers():
@@ -76,9 +78,9 @@ def default_hypers():
         max_ep_len      = 400,
         train_every     = 50,
         train_steps     = 30,
-        p_Q_batch       = 0.0,
-        p_Q_objectives  = -4.0,
-        env_args        = {},
+        p_batch         = 0.5,
+        p_objectives    = -4.0,
+        env_args        = {}
     )
 
 def combine(*hps: HyperParams):

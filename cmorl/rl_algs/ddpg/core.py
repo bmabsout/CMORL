@@ -1,6 +1,7 @@
 import numpy as np
 from keras import Model # type: ignore
-from keras.layers import Dense, Input, Rescaling, Activation # type: ignore
+from keras.layers import Dense, Input, Rescaling, Activation, Lambda, Dropout # type: ignore
+from keras.constraints import MaxNorm # type: ignore
 from gymnasium import spaces
 import keras
 import tensorflow as tf # type: ignore
@@ -12,6 +13,8 @@ def mlp_functional(
     hidden_sizes=(32,),
     activation="relu",
     use_bias=True,
+    kernel_constraint=None,
+    use_dropout=False,
     output_activation="sigmoid",
     seed=42
 ):
@@ -22,7 +25,10 @@ def mlp_functional(
         layer = Dense(
             units=hidden_size,
             activation=activation,
+            kernel_constraint=kernel_constraint,
         )(layer)
+        if use_dropout:
+            layer = Dropout(0.2)(layer)
     outputs = Dense(
         units=hidden_sizes[-1],
         activation=output_activation,
@@ -85,6 +91,7 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
         hidden_sizes + (act_space.shape[0],),
         use_bias=True,
         output_activation=None,
+        kernel_constraint=None,
         activation="relu",
         seed=seed
     )
@@ -94,7 +101,6 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
     model = keras.Model(inputs, clipped)
     model.compile()
     return model
-
 
 def critic(
     obs_space: spaces.Box,
@@ -108,11 +114,12 @@ def critic(
     inputs = Input((obs_space.shape[0] + act_space.shape[0],))
     normalized_input = RescalingFixed(1. / concated_normalizer)(inputs)
     outputs = mlp_functional(
-        normalized_input, hidden_sizes + (rwds_dim,), output_activation=None, seed=seed
+        normalized_input, hidden_sizes + (rwds_dim,), output_activation=None, kernel_constraint=None, use_dropout=False, seed=seed, activation="relu"
     )
 
     # name the layer before sigmoid
-    before_clip = RescalingFixed(0.1, offset=0.3, name="before_clip")(outputs)
+    # before_clip = Lambda(lambda x: tf.abs(x*0.1+0.3), name="before_clip")(outputs)
+    before_clip =  RescalingFixed(1.0, offset=0.0, name="before_clip")(outputs)
 
     biased_normed = ClipLayer(0.0, 1.0)(before_clip)
     model = keras.Model(inputs, biased_normed)
@@ -126,7 +133,7 @@ def mlp_actor_critic(
     rwds_dim: int,
     obs_normalizer=None,
     actor_hidden_sizes=(32, 32),
-    critic_hidden_sizes=(256, 256),
+    critic_hidden_sizes=(64, 64, 64),
     seed=42
 ) -> tuple[Model, Model]:
     if obs_normalizer is None:

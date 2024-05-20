@@ -27,6 +27,19 @@ def random_transition(env: gym.Env):
 EnvType = TypeVar('EnvType', bound=gym.Env)
 RewardFnType: TypeAlias = Callable[[Transition, EnvType], float|np.ndarray]
 
+def discount_rewards(multi_dim_rewards: np.ndarray, gamma, normalize=True) -> np.ndarray:
+    """ multi_dim_rewards: [number_of_steps, objectives]"""
+    indices = np.array(range(multi_dim_rewards.shape[0]))
+    normalization_factor = (1.0 / (1.0 - gamma)) if normalize else 1.0
+    return np.sum(multi_dim_rewards.T * np.power(gamma, indices), axis=1) / normalization_factor
+
+def avg_rolling_discount(multi_dim_rewards, gamma, normalize=True) -> np.ndarray:
+    """ multi_dim_rewards: [number_of_steps, objectives]"""
+    rolling = np.zeros_like(multi_dim_rewards)
+    for i in range(multi_dim_rewards.shape[0]):
+        rolling[i] = discount_rewards(multi_dim_rewards[i:], gamma, normalize)
+    return np.mean(rolling, axis=0)
+
 @tf.function
 def default_q_composer(q_values, p_batch=0, p_objectives=-4.0, scalarize_batch_first=True):
     qs_c = p_mean(q_values,

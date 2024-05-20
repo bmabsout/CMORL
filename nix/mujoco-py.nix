@@ -24,6 +24,10 @@ let wheels = {
         url = https://files.pythonhosted.org/packages/88/a4/4bdc891ff9e1262c10570a86683696326a8b6d2d09aef70262c90d89a8e7/mujoco-2.3.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl;
         sha256 = "0k74j3cgsls8wh3qdc875mam4ys12j7djnpzzllb6x22rrbbvdj7";
       };
+      "x86_64-linux-python-3.12" = {
+        url = https://files.pythonhosted.org/packages/2d/45/4b230ca4d0f7291407ce09cc6e5902f9475ab6a35eee3a2c1823915ab146/mujoco-3.1.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl;
+        sha256 = "4f93bf770c3c963efe03c27b34ca59015e27ae70cdd4272a8312e583f52dbf40";
+      };
     };
 
 in buildPythonPackage rec {

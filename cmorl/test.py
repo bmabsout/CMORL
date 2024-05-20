@@ -2,7 +2,7 @@ import argparse
 import gymnasium
 import numpy as np
 from cmorl.utils import save_utils, test_utils
-from cmorl.configs import get_config
+from cmorl.configs import get_env_and_config
 
 
 def parse_args(args=None):
@@ -26,8 +26,8 @@ if __name__ == "__main__":
     if cmd_args.env_name is None:
         cmd_args.env_name = folders[0].parents[5].name
         print(cmd_args.env_name)
-    config = get_config(cmd_args.env_name)
-    env = gymnasium.make(cmd_args.env_name, render_mode="human" if cmd_args.render else None, **config.hypers.env_args) # type: ignore
+    env_fn, config = get_env_and_config(cmd_args.env_name)
+    env = env_fn(render_mode="human" if cmd_args.render else None)
     runs = test_utils.run_tests(
         env,
         cmd_args,

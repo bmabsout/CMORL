@@ -1,9 +1,11 @@
 from functools import partial
+from typing import Any, Callable, Type, TypeAlias
 
 import gymnasium
+import gymnasium.wrappers.time_limit
 
 from cmorl.rl_algs.ddpg.hyperparams import HyperParams
-from cmorl.utils.reward_utils import CMORL
+from cmorl.utils.reward_utils import CMORL, default_q_composer
 from cmorl import reward_fns
 
 class Config:
@@ -19,6 +21,12 @@ class FixSleepingLander(gymnasium.Wrapper):
             truncated = True
             done = False
         return obs, reward, done, truncated, info
+    
+class ForcedTimeLimit(gymnasium.wrappers.TimeLimit):
+    def step(self, action):
+        obs, reward, done, _, info = super().step(action)
+        truncated = self._elapsed_steps >= self._max_episode_steps
+        return obs, reward, done, truncated, info
 
 env_configs: dict[str, Config] = {
     "Reacher-v4": Config(
@@ -28,6 +36,7 @@ env_configs: dict[str, Config] = {
                 "obs_normalizer": [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 4.0, 4.0, 2.0, 2.0, 2.0],
             },
         ),
+        wrapper=partial(ForcedTimeLimit, max_episode_steps=100),
     ),
     "Ant-v4": Config(
         CMORL(partial(reward_fns.mujoco_multi_dim_reward_joints_x_velocity)),
@@ -38,8 +47,8 @@ env_configs: dict[str, Config] = {
         HyperParams(gamma=0.99, pi_lr=1e-3, q_lr=1e-3, epochs=60),
     ),
     "HalfCheetah-v4": Config(
-        CMORL(partial(reward_fns.mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=0.2)),
-        HyperParams(gamma=0.99, epochs=20, pi_lr=1e-3, q_lr=1e-3),
+        CMORL(partial(reward_fns.mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=0.15)),
+        HyperParams(gamma=0.99, epochs=200, pi_lr=1e-3, q_lr=1e-3),
     ),
     "Pendulum-v1": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0))
@@ -48,19 +57,21 @@ env_configs: dict[str, Config] = {
         CMORL(reward_fns.lunar_lander_rw),
         HyperParams(
             ac_kwargs={
-                "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high # type: ignore
+                "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high, # type: ignore
+                "critic_hidden_sizes": (256, 256, 256),
+                "actor_hidden_sizes": (32, 32),
             },
             gamma=0.99,
             max_ep_len=1000,
             epochs=100,
-            pi_lr=1e-3,
-            q_lr=1e-3,
-            p_Q_objectives=0.5,
-            p_Q_batch=0.5,
+            p_objectives = 0.5,
+            # p_batch = 2.0,
         ),
         wrapper=FixSleepingLander,
     ),
 }
 
-def get_config(env_name: str) -> Config:
-    return env_configs.get(env_name, Config())
+def get_env_and_config(env_name: str) -> tuple[Callable[..., gymnasium.Env], Config]:
+    config = env_configs.get(env_name, Config())
+    make_env = lambda **kwargs: config.wrapper(gymnasium.make(env_name, **{**kwargs, **config.hypers.env_args}))
+    return make_env, config 

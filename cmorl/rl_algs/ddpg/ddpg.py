@@ -23,6 +23,9 @@ from cmorl.utils.loss_composition import (
     scale_gradient,
 )
 
+def np_const_width(array):
+    formatter = {'float_kind': lambda x: f"{' ' if np.sign(x) > -1 else '-'}{np.abs(x):2.2f}"}
+    return np.array2string(np.array(array), formatter=formatter, separator=', ')
 
 class ReplayBuffer:
     """
@@ -55,6 +58,18 @@ class ReplayBuffer:
             rews=self.rews_buf[idxs],
             done=self.done_buf[idxs],
         )
+
+def add_noise_to_weights(o, actor , action_space, noise_scale, np_random: np.random.Generator):
+    weights = [np.copy(w) for w in actor.get_weights()] # this is a list of numpy arrays
+    noised = [w + np_random.standard_normal(w.shape) * noise_scale for w in weights]
+    actor.set_weights(noised)
+    action = actor(np.array([o], dtype=np.float32))[0]
+    actor.set_weights(weights)
+    a = action * (
+        action_space.high - action_space.low
+    ) / 2.0 + (action_space.high + action_space.low) / 2.0
+    return np.clip(a, action_space.low, action_space.high)
+    
 
 """
 
@@ -149,6 +164,7 @@ def ddpg(
     act_dim = env.action_space.shape[0]
     rew_dims = cmorl.calculate_space(env).shape[0] if cmorl else 1
     max_discounted_sum = np.zeros((rew_dims)) + (1.0 / (1.0 - hp.gamma))
+    discounted_sum_stds = np.ones((rew_dims))
 
     # Main outputs from computation graph
     with tf.name_scope("main"):
@@ -165,7 +181,7 @@ def ddpg(
         #     q_network.input, {"q": q_network.output, "before_clip": q_network.layers[-2].output})
         q_and_before_clip = keras.Model(
             q_network.input,
-            {"q": q_network.output, "before_clip": q_network.layers[-2].output},
+            {"q": q_network.output, "before_clip": q_network.layers[-2].output, "before_before_clip": q_network.layers[-3].output},
         )
         q_and_before_clip.compile()
     # Target networks
@@ -207,28 +223,37 @@ def ddpg(
             outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
             q = outputs["q"]
 
-            # tf.print(before_clip)
-            # tf.print(outputs["before_clip"])
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
-
+            q_pi_later = q_and_before_clip(tf.concat([obs2, pi_network(obs2)], axis=-1))["q"]
             batch_size = tf.shape(dones)[0]
 
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
 
-            backup = tf.stop_gradient(
-                rews / max_discounted_sum + (1 - dones) * hp.gamma * q_pi_targ
-            )
+            
+            discounted_sum_estimate = rews / max_discounted_sum + (1.0 - dones) * hp.gamma * rews
+            rw_std = tf.expand_dims(tf.math.reduce_std(discounted_sum_estimate, axis=0), axis=0)
+            backup = tf.stop_gradient(rews / max_discounted_sum + (1.0 - dones) * hp.gamma * q_pi_targ)
+            
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
-            q_bellman_c = 1.0 - p_mean(tf.abs(q - backup), p=2.0)
+            # q_bellman_c = 1.0 - p_mean(tf.abs(q - backup), p=2.0)
+            q_bellman_batch = p_mean( tf.abs(q - backup), p=4.0, axis=0, dtype=tf.float32)
+            # q_bellman_c = p_mean(1.0 - 0.01*q_bellman_batch/tf.maximum(0.01, rw_std), p=0.0)
+            q_bellman_c = p_mean(1.0 - q_bellman_batch, p=-4.0)
             with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
             # tf.print(q_bellman_c)
             # tf.print(with_reg)
             # tf.print(before_clip)
             q_loss = 1.0 - with_reg
 
+            # tf.print("","before_clip_min", np_const_width(1.0 - p_mean(1.0 - outputs["before_before_clip"], p=20.0, axis=0)), "\n"
+            # , "before_clip_max", np_const_width(p_mean(outputs["before_before_clip"], p=20.0, axis=0)), "\n"
+            # , "q_min", np_const_width(1.0 - p_mean(1.0 - q, p=20.0, axis=0)), "\n"
+            # , "q_max", np_const_width(p_mean(q, p=20.0, axis=0)), "\n"
+            # , "q_loss", q_loss
+            # , "\n")
             # q_loss = tf.reduce_mean((q - backup) ** 2) + before_clip
             # q_loss = p_mean(q_loss, p=2)
 
@@ -246,7 +271,7 @@ def ddpg(
             before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-1.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
             qs_c, q_c = q_composer(
-                q_values, p_batch=hp.p_Q_batch, p_objectives=hp.p_Q_objectives
+                q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives
             )
             all_c = p_mean([q_c, before_clip_c], p=0.0)
             pi_loss = 1.0 - all_c
@@ -273,7 +298,7 @@ def ddpg(
             o, r, d, ep_ret, ep_len = env.reset(), 0, False, 0, 0
             while not (d or (ep_len == hp.max_ep_len)):
                 # Take deterministic actions at test time (noise_scale=0)
-                o, r, d, _, _ = env.step(get_action(o, 0))
+                o, r, d, _, _ = env.step(add_noise_to_weights(o, pi_network, env.action_space, hp.act_noise, np_random))
                 ep_ret += r
                 ep_len += 1
                 env.render()
@@ -294,7 +319,8 @@ def ddpg(
         use the learned policy (with some noise, via act_noise).
         """
         if t > hp.start_steps:
-            action = get_action(o, hp.act_noise * (total_steps - t) / total_steps, np_random)
+            # action = get_action(o, hp.act_noise * (total_steps - t) / total_steps, np_random)
+            action = add_noise_to_weights(o, pi_network, env.action_space, hp.act_noise * (total_steps - t) / total_steps, np_random)
         else:
             env.action_space._np_random = np_random
             action = env.action_space.sample()
