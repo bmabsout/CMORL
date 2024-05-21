@@ -1,8 +1,8 @@
 from functools import partial
-from typing import Any, Callable, Type, TypeAlias
+from typing import Callable
 
 import gymnasium
-import gymnasium.wrappers.time_limit
+import gymnasium.wrappers
 
 from cmorl.rl_algs.ddpg.hyperparams import HyperParams
 from cmorl.utils.reward_utils import CMORL, default_q_composer

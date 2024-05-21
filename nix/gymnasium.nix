@@ -15,12 +15,12 @@
 , jaxlib
 , matplotlib
 , moviepy
+, mujoco-py
 , opencv4
 , pybox2d
 , pygame
 , pytestCheckHook
 , scipy
-, callPackage
 , stdenv
 }:
 
@@ -33,7 +33,7 @@ buildPythonPackage rec {
     owner = "Farama-Foundation";
     repo = "gymnasium";
     rev = "refs/tags/v${version}";
-    hash = "sha256-L7fn9FaJzXwQhjDKwI9hlFpbPuQdwynU+Xjd8bbjxiw=";
+    sha256 = "sha256-KFE9Dx6oBmowkEsokq0QIpe7sFdO2XDVW9SSqWrXdU8=";
   };
 
   nativeBuildInputs = [ setuptools ];
@@ -45,7 +45,8 @@ buildPythonPackage rec {
     jax-jumpy
     numpy
     typing-extensions
-    (callPackage ./mujoco-py.nix {})
+    mujoco-py
+    # (callPackage ./mujoco-py.nix )
   ] ++ lib.optionals (pythonOlder "3.10") [ importlib-metadata ];
 
   pythonImportsCheck = [ "gymnasium" ];
@@ -62,6 +63,7 @@ buildPythonPackage rec {
     pytestCheckHook
     scipy
   ];
+
   # if `doCheck = true` on Darwin, `jaxlib` is evaluated, which is both
   # marked as broken and throws an error during evaluation if the package is evaluated anyway.
   # disabling checks on Darwin avoids this and allows the package to be built.

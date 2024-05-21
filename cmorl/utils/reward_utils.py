@@ -33,7 +33,7 @@ def discount_rewards(multi_dim_rewards: np.ndarray, gamma, normalize=True) -> np
     normalization_factor = (1.0 / (1.0 - gamma)) if normalize else 1.0
     return np.sum(multi_dim_rewards.T * np.power(gamma, indices), axis=1) / normalization_factor
 
-def avg_rolling_discount(multi_dim_rewards, gamma, normalize=True) -> np.ndarray:
+def avg_rolling_discount(multi_dim_rewards, gamma, normalize=True, done=True) -> np.ndarray:
     """ multi_dim_rewards: [number_of_steps, objectives]"""
     rolling = np.zeros_like(multi_dim_rewards)
     for i in range(multi_dim_rewards.shape[0]):
