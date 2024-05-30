@@ -74,7 +74,7 @@ def default_hypers():
         q_lr            = 1e-3,
         batch_size      = 100,
         start_steps     = 1000,
-        act_noise       = 0.1,
+        act_noise       = 0.2,
         max_ep_len      = 400,
         train_every     = 50,
         train_steps     = 30,

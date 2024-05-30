@@ -118,7 +118,7 @@ def critic(
     )
 
     # name the layer before sigmoid
-    # before_clip = Lambda(lambda x: tf.abs(x*0.1+0.3), name="before_clip")(outputs)
+    # before_clip = Lambda(lambda x: tf.tanh(tf.abs(x)), name="before_clip", output_shape=lambda o:o)(outputs)
     before_clip =  RescalingFixed(1.0, offset=0.0, name="before_clip")(outputs)
 
     biased_normed = ClipLayer(0.0, 1.0)(before_clip)

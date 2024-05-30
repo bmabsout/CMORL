@@ -38,7 +38,7 @@ def tf_pop(tensor, axis):
 
 
 @tf.function
-def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype=tf.float64) -> tf.Tensor:
+def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
     """
     The Generalized mean
     l: a tensor of elements we would like to compute the p_mean with respect to, elements must be > 0.0
@@ -47,21 +47,24 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype
     axis: axis or axese to collapse the pmean with respect to, None would collapse all
     https://www.wolframcloud.com/obj/26a59837-536e-4e9e-8ed1-b1f7e6b58377
     """
+    l = tf.convert_to_tensor(l)
+    dtype = dtype if dtype else l.dtype
     slack = tf.cast(slack, dtype)
-    l = tf.cast(tf.convert_to_tensor(l), dtype) + slack
+    l = tf.cast(l, dtype)
+    slacked = l + slack
     p = tf.cast(p, dtype)
     default_val = tf.cast(default_val, dtype)
     min_val = tf.constant(1e-5, dtype=dtype)
     p = tf.where(tf.abs(p) < min_val, -min_val if p < 0.0 else min_val, p)
     
-    stabilizer = tf.reduce_min(l) if p < 1.0 else tf.reduce_max(l)
-    stabilized_l = l/stabilizer # stabilize the values to prevent overflow or underflow
+    stabilizer = tf.reduce_min(slacked) if p < 1.0 else tf.reduce_max(slacked)
+    stabilized_l = slacked/stabilizer # stabilize the values to prevent overflow or underflow
 
-    p_meaned = tf.cond(tf.reduce_prod(tf.shape(l)) == 0 # condition if an empty array is fed in
-        , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(l), axis)) if axis else default_val
+    p_meaned = tf.cond(tf.reduce_prod(tf.shape(slacked)) == 0 # condition if an empty array is fed in
+        , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(slacked), axis)) if axis else default_val
         , lambda: (tf.reduce_mean(stabilized_l**p, axis=axis))**(1.0/p) - slack)*stabilizer
     
-    clip_t = tf.clip_by_value(p_meaned, tf.reduce_min(slack), tf.reduce_max(l-slack)) # prevent negative outputs
+    clip_t = tf.clip_by_value(p_meaned, tf.reduce_min(l), tf.reduce_max(l)) # prevent negative outputs
     return p_meaned + tf.stop_gradient(clip_t - p_meaned)
 
 # @tf.custom_gradient

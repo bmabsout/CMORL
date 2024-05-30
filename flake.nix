@@ -18,6 +18,7 @@
         with_cuda={
           cudaCapabilities = ["8.6"];
           cudaSupport = true;
+          allowUnfree = true;
         };
       };
       system = "x86_64-linux";
@@ -38,7 +39,7 @@
               ];
               shellHook = ''
                 export PYTHONPATH=$PYTHONPATH:$(pwd) # to allow cmorl to be imported as editable
-                export LD_LIBRARY_PATH=${pkgs.wayland}/lib:$LD_LIBRARY_PATH
+                export LD_LIBRARY_PATH=${pkgs.wayland}/lib:$LD_LIBRARY_PATH:/run/opengl-driver/lib
               '';
             }
         ) nixpkgs_configs;

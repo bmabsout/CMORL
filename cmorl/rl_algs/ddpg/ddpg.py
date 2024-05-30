@@ -38,14 +38,16 @@ class ReplayBuffer:
         self.acts_buf = np.zeros([size, act_dim], dtype=np.float32)
         self.rews_buf = np.zeros([size, rwds_dim], dtype=np.float32)
         self.done_buf = np.zeros(size, dtype=np.float32)
+        self.estimated_values_buf = np.zeros([size, rwds_dim], dtype=np.float32)
         self.ptr, self.size, self.max_size = 0, 0, size
 
-    def store(self, obs, act, rew, next_obs, done):
+    def store(self, obs, act, rew, next_obs, done, estimated_values):
         self.obs1_buf[self.ptr] = obs
         self.obs2_buf[self.ptr] = next_obs
         self.acts_buf[self.ptr] = act
         self.rews_buf[self.ptr] = rew
         self.done_buf[self.ptr] = done
+        self.estimated_values_buf[self.ptr] = estimated_values
         self.ptr = (self.ptr + 1) % self.max_size
         self.size = min(self.size + 1, self.max_size)
 
@@ -57,6 +59,7 @@ class ReplayBuffer:
             acts=self.acts_buf[idxs],
             rews=self.rews_buf[idxs],
             done=self.done_buf[idxs],
+            estimated_values=self.estimated_values_buf[idxs],
         )
 
 def add_noise_to_weights(o, actor , action_space, noise_scale, np_random: np.random.Generator):
@@ -69,7 +72,6 @@ def add_noise_to_weights(o, actor , action_space, noise_scale, np_random: np.ran
         action_space.high - action_space.low
     ) / 2.0 + (action_space.high + action_space.low) / 2.0
     return np.clip(a, action_space.low, action_space.high)
-    
 
 """
 
@@ -128,7 +130,7 @@ def ddpg(
 
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
-
+    tf.device("GPU")
     tf.random.set_seed(hp.seed)
     np_random, _ = seeding.np_random(hp.seed)
 
@@ -217,7 +219,7 @@ def ddpg(
             v_targ.assign(hp.polyak * v_targ + (1 - hp.polyak) * v_main)
 
     @tf.function
-    def q_update(obs1, obs2, acts, rews, dones):
+    def q_update(obs1, obs2, acts, rews, dones, estimated_values):
         with tf.GradientTape() as tape:
             # q_squeezed = tf.squeeze(q, axis=1)
             outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
@@ -229,25 +231,37 @@ def ddpg(
             batch_size = tf.shape(dones)[0]
 
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
-
-            
-            discounted_sum_estimate = rews / max_discounted_sum + (1.0 - dones) * hp.gamma * rews
-            rw_std = tf.expand_dims(tf.math.reduce_std(discounted_sum_estimate, axis=0), axis=0)
-            backup = tf.stop_gradient(rews / max_discounted_sum + (1.0 - dones) * hp.gamma * q_pi_targ)
-            
+            estimated_min = p_mean(estimated_values, p=-4.0, axis=0, slack=1e-7)
+            estimated_mean_value = p_mean(estimated_values, p=1.0, axis=0)
+            estimated_max = 1.0 - p_mean(1.0 - estimated_values, p=-4.0, axis=0, slack=1e-7)
+            estimated_spread = estimated_max - estimated_min + 1e-7
+            estimated_std = tf.expand_dims(tf.math.reduce_std(estimated_values, axis=0), axis=0) + 1e-7
+            normalization_factor = (1.0 - hp.gamma)
+            backup = tf.stop_gradient(rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_targ)
+            soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
-            q_bellman_c = 1.0 - p_mean(tf.abs(q - backup), p=2.0)
+            # error = tf.abs(outputs["before_clip"] - soon_backup)
+            error = tf.abs(outputs["before_clip"] - backup)
+            # smooth_max_errors = tf.stop_gradient(p_mean(error, p=10.0, axis=0)) +1e-7
+            q_bellman_c = p_mean(estimated_std/(estimated_std + p_mean(error, p = 2.0, axis=0)), p=0.0)
+            # q_bellman_c = p_mean(1e-6*p_mean(error, p=2.0)/(estimated_spread**0.5 + 1e-6), p=1.0)
+            # tf.print(p_mean(error, p=2.0, axis=0)/smooth_max_errors)
+            q_direct_c = p_mean(1.0 - 1e-2*p_mean(tf.abs(q - estimated_values)/estimated_std, p=.0), p=0.0)
             # q_bellman_batch = p_mean( tf.abs(q - backup), p=4.0, axis=0, dtype=tf.float32)
-            # q_bellman_c = p_mean(1.0 - 0.01*q_bellman_batch/tf.maximum(0.01, rw_std), p=0.0)
+            # q_bellman_c = p_mean(1.0 - 0.01*q_bellman_batch/tf.maximum(0.01, estimated_std), p=0.0)
             # q_bellman_c = p_mean(1.0 - q_bellman_batch, p=-4.0)
-            with_reg = p_mean(tf.stack([q_bellman_c, keep_in_range]), p=0.0)
+            with_reg = p_mean(tf.stack([
+                q_bellman_c,
+                # q_direct_c,
+                # keep_in_range
+            ]), p=0.0)
             # tf.print(q_bellman_c)
             # tf.print(with_reg)
             # tf.print(before_clip)
+            # q_loss = tf.sqrt(tf.reduce_mean(((outputs["before_clip"] - backup) ** 2)/estimated_std**2))
             q_loss = 1.0 - with_reg
-
             # tf.print("","before_clip_min", np_const_width(1.0 - p_mean(1.0 - outputs["before_before_clip"], p=20.0, axis=0)), "\n"
             # , "before_clip_max", np_const_width(p_mean(outputs["before_before_clip"], p=20.0, axis=0)), "\n"
             # , "q_min", np_const_width(1.0 - p_mean(1.0 - q, p=20.0, axis=0)), "\n"
@@ -260,7 +274,7 @@ def ddpg(
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return q_bellman_c, keep_in_range
+        return q_loss, q_bellman_c, keep_in_range
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
@@ -283,7 +297,7 @@ def ddpg(
         pi_optimizer.apply_gradients(grads_and_vars)
         return all_c, qs_c, q_c, before_clip_c
 
-    def get_action(o, noise_scale, np_random: np.random.Generator = np.random):
+    def randomize_action(o, noise_scale, np_random: np.random.Generator = np.random):
         minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
         noise = noise_scale * np_random.normal(size=act_dim).astype(np.float32)
         a = (minus_1_to_1 + noise) * (
@@ -305,10 +319,72 @@ def ddpg(
             # logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
             sum_step_return += ep_ret / ep_len
         return sum_step_return / n
+    
+    def get_action(o, schedule = lambda t: 1.0 - t / total_steps):
+        if t > hp.start_steps:
+            # action = randomize_action(o, hp.act_noise * schedule(t), np_random)
+            action = add_noise_to_weights(o, pi_network, env.action_space, hp.act_noise * schedule(t), np_random)
+        else:
+            env.action_space._np_random = np_random
+            action = env.action_space.sample()
+        if np.isnan(action).any():
+            # a = env.action_space.sample()
+            print(f"nan detected in action {action}")
+            # Log the occurrence in Weights and Biases
+            weights_and_biases.log({"message": "NaN detected in action"}, step=t)
+            weights_and_biases.finish()
+            raise ValueError("NaN detected in action")
+        return action
+
+    def ddpg_update():
+        for train_step in range(hp.train_steps):
+            batch = replay_buffer.sample_batch(hp.batch_size, np_random=np_random)
+            obs1 = tf.constant(batch["obs1"])
+            obs2 = tf.constant(batch["obs2"])
+            acts = tf.constant(batch["acts"])
+            rews = tf.constant(batch["rews"])
+            dones = tf.constant(batch["done"])
+            estimated_values = tf.constant(batch["estimated_values"])
+            # Q-learning update
+            qloss, q_bellman_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones, estimated_values)
+            logger.store(LossQ=qloss)
+            weights_and_biases.log({"Q-Loss": qloss}, step=t)
+            logger.store(Q_before_clip_c=1.0 - q_before_clip_c)
+            logger.store(Q_bellman_c=1.0 - q_bellman_c)
+            weights_and_biases.log({"Q-before_clip_c": 1.0 - q_before_clip_c}, step=t)
+            weights_and_biases.log({"Q-bellman_c": 1.0 - q_bellman_c}, step=t)
+            # Policy update
+            (
+                all_c,
+                qs_c,
+                q_c,
+                before_clip_c,
+            ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
+
+            qs_c = qs_c.numpy()
+            logger.store(
+                Q_comp=q_c,
+                before_clip=before_clip_c,
+            )
+            weights_and_biases.log(
+                {"Q-composed": q_c, "before_clip": before_clip_c},
+                step=t
+            )
+            qs_dict_ = {}
+            for i, q in enumerate(qs_c):
+                qs_dict_[f"Q{i}"] = q
+            logger.store(**qs_dict_)
+            weights_and_biases.log(qs_dict_, step=t)
+
+            # target update
+            target_update()
 
     start_time = time.time()
     o, info = env.reset()
-    done, ep_ret, ep_len = False, 0.0, 0
+    observations = [o]
+    actions = []
+    rewards = []
+    cmorl_rewards = []
     total_steps = hp.steps_per_epoch * hp.epochs
 
     # Main loop: collect experience in env and update/log each epoch
@@ -318,99 +394,54 @@ def ddpg(
         from a uniform distribution for better exploration. Afterwards,
         use the learned policy (with some noise, via act_noise).
         """
-        if t > hp.start_steps:
-            # action = get_action(o, hp.act_noise * (total_steps - t) / total_steps, np_random)
-            action = add_noise_to_weights(o, pi_network, env.action_space, hp.act_noise * (total_steps - t) / total_steps, np_random)
-        else:
-            env.action_space._np_random = np_random
-            action = env.action_space.sample()
-
-        if np.isnan(action).any():
-            # a = env.action_space.sample()
-            print(f"nan detected in action {action}")
-            # Log the occurrence in Weights and Biases
-            weights_and_biases.log({"message": "NaN detected in action"}, step=t)
-            # exit(1)
-            weights_and_biases.finish()
-            return
+        action = get_action(observations[-1])
+        actions.append(action)
 
         # Step the env
-        o2, reward, done, truncated, info = env.step(action)
-        
-        if cmorl:
-            reward = cmorl(reward_utils.Transition(o, action, o2, done, info), env) # getting the reward before the step, since the reward is based on the previous state
+        o, reward, done, truncated, info = env.step(action)
+        observations.append(o)
 
-        ep_ret += reward
-        ep_len += 1
+        if cmorl:
+            cmorl_rewards.append(cmorl(reward_utils.Transition(observations[-2], action, observations[-1], done, info), env))
+
+        rewards.append(reward)
 
         # Ignore the "done" signal if it comes from hitting the time
         # horizon (that is, when it's an artificial terminal signal
         # that isn't based on the agent's state)
-        truncated = truncated or ep_len == hp.max_ep_len
+        truncated = truncated or len(rewards) == hp.max_ep_len
         done = done and not truncated
 
-        # Store experience to replay buffer
-        replay_buffer.store(o, action, reward, o2, done)
-
-        # Super critical, easy to overlook step: make sure to update
-        # most recent observation!
-        o = o2
+        if done or truncated:
+            rewards = np.array(rewards)
+            cmorl_rewards = np.array(cmorl_rewards)
+            ep_ret = np.sum(rewards, axis=0)
+            ep_len = len(actions)
+            cmorl_ret = np.sum(cmorl_rewards, axis=0)
+            estimated_values = reward_utils.values(cmorl_rewards, hp.gamma, done=done)
+            dones = [False] * ep_len
+            dones[-1] = done
+            for i in range(ep_len):
+                replay_buffer.store(observations[i], actions[i], cmorl_rewards[i], observations[i + 1], dones[i], estimated_values[i])
+            ret_dict_ = {f"EpRet_{i}": cmorl_ret[i] for i in range(rew_dims)}
+            logger.store(**ret_dict_)
+            weights_and_biases.log(ret_dict_, step=t)
+            weights_and_biases.log({"OrigEpRet": ep_ret}, step=t)
+            logger.store(OrigEpRet=ep_ret)
+            logger.store(EpLen=ep_len)
+            weights_and_biases.log({"EpLen": ep_len}, step=t)
+            o, i = env.reset()
+            rewards = []
+            cmorl_rewards = []
+            observations = [o]
+            actions = []
 
         if t > hp.start_steps and t % hp.train_every == 0:
             """
             Perform all DDPG updates at the end of the trajectory,
             in accordance with tuning done by TD3 paper authors.
             """
-            for train_step in range(hp.train_steps):
-                batch = replay_buffer.sample_batch(hp.batch_size, np_random=np_random)
-                obs1 = tf.constant(batch["obs1"])
-                obs2 = tf.constant(batch["obs2"])
-                acts = tf.constant(batch["acts"])
-                rews = tf.constant(batch["rews"])
-                dones = tf.constant(batch["done"])
-                # Q-learning update
-                qloss_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones)
-                logger.store(LossQ=1.0 - qloss_c)
-                weights_and_biases.log({"Q-Loss": 1.0 - qloss_c}, step=t)
-                logger.store(Q_before_clip_c=q_before_clip_c)
-                weights_and_biases.log({"Q-before_clip_c": q_before_clip_c}, step=t)
-                # Policy update
-                (
-                    all_c,
-                    qs_c,
-                    q_c,
-                    before_clip_c,
-                ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
-
-                qs_c = qs_c.numpy()
-                logger.store(
-                    Q_comp=q_c,
-                    before_clip=before_clip_c,
-                )
-                weights_and_biases.log(
-                    {"Q-composed": q_c, "before_clip": before_clip_c},
-                    step=t
-                )
-                qs_dict_ = {}
-                for i, q in enumerate(qs_c):
-                    qs_dict_[f"Q{i}"] = q
-                logger.store(**qs_dict_)
-                weights_and_biases.log(qs_dict_, step=t)
-
-                # target update
-                target_update()
-
-        if done or truncated:
-            # print(ep_ret)
-            ret_dict_ = {}
-            for i in range(rew_dims):
-                ret_dict_[f"EpRet_{i}"] = ep_ret[i]
-            logger.store(**ret_dict_)
-            weights_and_biases.log(ret_dict_, step=t)
-            logger.store(EpLen=ep_len)
-            weights_and_biases.log({"EpLen": ep_len}, step=t)
-            o, i = env.reset()
-            reward, done, ep_ret, ep_len = 0, False, 0, 0
+            ddpg_update()
 
         # End of epoch wrap-up
         if t > hp.start_steps and t % hp.steps_per_epoch == 0:
@@ -428,15 +459,18 @@ def ddpg(
             logger.log_tabular("Epoch", epoch)
             weights_and_biases.log({"Epoch": epoch}, step=t)
             logger.log_tabular("EpLen", average_only=True)
+            logger.log_tabular("OrigEpRet", average_only=True)
             for i in range(rew_dims):
                 logger.log_tabular(f"EpRet_{i}", average_only=True)
             logger.log_tabular("Time", time.time() - start_time)
             logger.log_tabular("TotalEnvInteracts", t)
             # logger.log_tabular("before_clip", average_only=True)
             # logger.log_tabular("Qs", average_only=True)
-            for i in range(qs_c.shape[0]):
+            for i in range(rew_dims):
                 logger.log_tabular(f"Q{i}", average_only=True)
             logger.log_tabular("Q_comp", average_only=True)
+            logger.log_tabular("Q_before_clip_c", average_only=True)
+            logger.log_tabular("Q_bellman_c", average_only=True)
             # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)

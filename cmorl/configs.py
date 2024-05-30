@@ -58,11 +58,11 @@ env_configs: dict[str, Config] = {
         HyperParams(
             ac_kwargs={
                 "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high, # type: ignore
-                "critic_hidden_sizes": (256, 256, 256),
+                "critic_hidden_sizes": (128, 128,128),
                 "actor_hidden_sizes": (32, 32),
             },
             gamma=0.99,
-            max_ep_len=1000,
+            max_ep_len=400,
             epochs=100,
             p_objectives = 0.5,
             # p_batch = 2.0,

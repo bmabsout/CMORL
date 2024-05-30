@@ -1,5 +1,4 @@
 import argparse
-import gymnasium
 import numpy as np
 from cmorl.utils import save_utils, test_utils
 from cmorl.configs import get_env_and_config
@@ -15,6 +14,7 @@ def parse_args(args=None):
     )
     parser.add_argument("-env", "--env_name", type=str, default=None)
     parser.add_argument("-n", "--num_tests", type=int, default=20)
+    parser.add_argument("-f", "--force_truncate_at", type=int, default=None)
     return parser.parse_args(args)
 
 
@@ -32,6 +32,7 @@ if __name__ == "__main__":
         env,
         cmd_args,
         folders=folders,
+        max_ep_len=config.hypers.max_ep_len,
         cmorl=config.cmorl,
     )
     print(f"{np.mean(runs):.4f}+-{np.std(runs):.4f}")
