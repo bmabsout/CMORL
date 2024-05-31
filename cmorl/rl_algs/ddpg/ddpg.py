@@ -193,6 +193,10 @@ def ddpg(
         pi_targ_network, q_targ_network = actor_critic(
             env.observation_space, env.action_space, rew_dims, **hp.ac_kwargs
         )
+        q_targ_and_before_clip = keras.Model(
+            q_targ_network.input,
+            {"q": q_targ_network.output, "before_clip": q_targ_network.layers[-2].output},
+        )
 
     # make sure network and target network is using the same weights
     pi_targ_network.set_weights(pi_network.get_weights())
@@ -226,8 +230,8 @@ def ddpg(
             q = outputs["q"]
 
             pi_targ = pi_targ_network(obs2)
-            q_pi_targ = q_targ_network(tf.concat([obs2, pi_targ], axis=-1))
-            q_pi_later = q_and_before_clip(tf.concat([obs2, pi_network(obs2)], axis=-1))["q"]
+            q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["before_clip"]
+            q_pi_later = q_and_before_clip(tf.concat([obs2, pi_network(obs2)], axis=-1))["before_clip"]
             batch_size = tf.shape(dones)[0]
 
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
@@ -242,20 +246,21 @@ def ddpg(
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
-            # error = tf.abs(outputs["before_clip"] - soon_backup)
             error = tf.abs(outputs["before_clip"] - backup)
+            # error = tf.abs(outputs["before_clip"] - backup)
             # smooth_max_errors = tf.stop_gradient(p_mean(error, p=10.0, axis=0)) +1e-7
-            q_bellman_c = p_mean(estimated_std/(estimated_std + p_mean(error, p = 2.0, axis=0)), p=0.0)
+            # q_bellman_c = p_mean(estimated_std/(estimated_std + p_mean(error, p = 2.0, axis=0)), p=0.0)
+            q_bellman_c = 1.0 - p_mean(p_mean(error, p=2.0, axis=0), p=1.0)
             # q_bellman_c = p_mean(1e-6*p_mean(error, p=2.0)/(estimated_spread**0.5 + 1e-6), p=1.0)
             # tf.print(p_mean(error, p=2.0, axis=0)/smooth_max_errors)
-            q_direct_c = p_mean(1.0 - 1e-2*p_mean(tf.abs(q - estimated_values)/estimated_std, p=.0), p=0.0)
+            q_direct_c = 1.0 - p_mean(outputs["before_clip"] - estimated_values, p=2.0)
             # q_bellman_batch = p_mean( tf.abs(q - backup), p=4.0, axis=0, dtype=tf.float32)
             # q_bellman_c = p_mean(1.0 - 0.01*q_bellman_batch/tf.maximum(0.01, estimated_std), p=0.0)
             # q_bellman_c = p_mean(1.0 - q_bellman_batch, p=-4.0)
             with_reg = p_mean(tf.stack([
                 q_bellman_c,
                 # q_direct_c,
-                # keep_in_range
+                keep_in_range
             ]), p=0.0)
             # tf.print(q_bellman_c)
             # tf.print(with_reg)

@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 from cmorl.utils.loss_composition import p_mean
 from cmorl.utils.reward_utils import  Transition
@@ -64,4 +65,11 @@ def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
     second_leg = transition.next_state[7]*minize_speed_near_ground
     fuel_costs = 1.0 - np.abs(transition.action)
 
-    return np.concatenate([[dist_x, dist_y, very_near_dist_x, very_near_dist_y], fuel_costs**0.1, [first_leg, second_leg]])
+    return np.concatenate([[very_near_dist_x, very_near_dist_y], fuel_costs, [first_leg, second_leg]])
+
+@tf.function
+def lander_composer(q_values, p_batch=0, p_objectives=-4.0):
+    qs_c = p_mean(q_values, p=p_batch, axis=0)
+    land_after_getting_close = 0.1 + 0.9*qs_c[3:]
+    q_c = p_mean([p_mean(qs_c[0:2], p=-1.0), qs_c[2]**0.1, land_after_getting_close[0], land_after_getting_close[1]], p=p_objectives)
+    return qs_c, q_c

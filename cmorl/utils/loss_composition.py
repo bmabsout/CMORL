@@ -38,7 +38,7 @@ def tf_pop(tensor, axis):
 
 
 @tf.function
-def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
+def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
     """
     The Generalized mean
     l: a tensor of elements we would like to compute the p_mean with respect to, elements must be > 0.0

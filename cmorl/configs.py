@@ -54,7 +54,7 @@ env_configs: dict[str, Config] = {
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0))
     ),
     "LunarLanderContinuous-v2": Config(
-        CMORL(reward_fns.lunar_lander_rw),
+        CMORL(reward_fns.lunar_lander_rw, reward_fns.lander_composer),
         HyperParams(
             ac_kwargs={
                 "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high, # type: ignore
@@ -63,8 +63,8 @@ env_configs: dict[str, Config] = {
             },
             gamma=0.99,
             max_ep_len=400,
-            epochs=100,
-            p_objectives = 0.5,
+            epochs=40,
+            # p_objectives = 0.5,
             # p_batch = 2.0,
         ),
         wrapper=FixSleepingLander,
