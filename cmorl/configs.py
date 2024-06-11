@@ -4,14 +4,14 @@ from typing import Callable
 import gymnasium
 import gymnasium.wrappers
 
-from cmorl.rl_algs.ddpg.hyperparams import HyperParams
-from cmorl.utils.reward_utils import CMORL, default_q_composer
+from cmorl.rl_algs.ddpg.hyperparams import HyperParams, combine, default_hypers
+from cmorl.utils.reward_utils import CMORL
 from cmorl import reward_fns
 
 class Config:
     def __init__(self, cmorl: CMORL | None = None, hypers: HyperParams = HyperParams(), wrapper = gymnasium.Wrapper):
         self.cmorl = cmorl
-        self.hypers = hypers
+        self.hypers = combine(default_hypers(), hypers)
         self.wrapper = wrapper
 
 class FixSleepingLander(gymnasium.Wrapper):
@@ -53,19 +53,22 @@ env_configs: dict[str, Config] = {
     "Pendulum-v1": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0))
     ),
+    "Pendulum-custom": Config(
+        CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0))
+    ),
     "LunarLanderContinuous-v2": Config(
         CMORL(reward_fns.lunar_lander_rw, reward_fns.lander_composer),
         HyperParams(
             ac_kwargs={
                 "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high, # type: ignore
-                "critic_hidden_sizes": (128, 128,128),
+                "critic_hidden_sizes": (400, 300),
                 "actor_hidden_sizes": (32, 32),
             },
             gamma=0.99,
-            max_ep_len=400,
-            epochs=40,
-            # p_objectives = 0.5,
-            # p_batch = 2.0,
+            epochs=50,
+            polyak=0.99,
+            # p_objectives=0.0,
+            # p_batch=1.0,
         ),
         wrapper=FixSleepingLander,
     ),

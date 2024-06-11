@@ -5,7 +5,7 @@ import gymnasium.envs.mujoco.ant_v4
 from cmorl.rl_algs.ddpg.ddpg import ddpg
 from cmorl.rl_algs.ddpg.hyperparams import default_serializer
 from cmorl.configs import get_env_and_config
-
+import envs # for the gym registrations
 
 def parse_env_name(args=None):
     parser = argparse.ArgumentParser(add_help=False)

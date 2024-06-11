@@ -70,6 +70,6 @@ def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
 @tf.function
 def lander_composer(q_values, p_batch=0, p_objectives=-4.0):
     qs_c = p_mean(q_values, p=p_batch, axis=0)
-    land_after_getting_close = 0.1 + 0.9*qs_c[3:]
-    q_c = p_mean([p_mean(qs_c[0:2], p=-1.0), qs_c[2]**0.1, land_after_getting_close[0], land_after_getting_close[1]], p=p_objectives)
+    q_c = p_mean([qs_c[0], qs_c[1], 0.5+0.5*qs_c[2], 0.1+0.9*qs_c[3]**0.5, 0.1+0.9*qs_c[4]**0.5], p=p_objectives)
+    # q_c = p_mean(qs_c, p=p_objectives)
     return qs_c, q_c

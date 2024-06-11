@@ -9,7 +9,7 @@ from gymnasium.error import DependencyNotInstalled
 import tensorflow as tf
 from cmorl.utils.loss_composition import p_mean
 from cmorl.utils.reward_utils import CMORL, RewardFnType
-from toroid_utils import toroidal_distance, toroidal_pairwise_dist
+from .toroid_utils import toroidal_distance, toroidal_pairwise_dist
 
 @tf.function
 def flatten_upper_triangle(matrix):
@@ -255,3 +255,5 @@ if __name__ == "__main__":
         env.step(action)
         env.render()
     env.close()
+
+gym.register("Boids-v0", BoidsEnv) # type:ignore

@@ -2,6 +2,7 @@ import argparse
 import numpy as np
 from cmorl.utils import save_utils, test_utils
 from cmorl.configs import get_env_and_config
+import envs # for the gym registrations
 
 
 def parse_args(args=None):
