@@ -123,6 +123,10 @@ def move_towards_range(x, min, max):
 
     return 1.0 / tf.where(in_range, 1.0, tf.abs(normalized)**0.5), grad
 
+@tf.function
+def then(x, y, slack=0.2, p=0.0):
+    # return tf.minimum(1.0, 1.0 - x + y)
+    return p_mean([x,slack+y*(1-slack)], p=p)
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     with tf.GradientTape() as gt:

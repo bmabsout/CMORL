@@ -341,6 +341,10 @@ def ddpg(
         return action
 
     def ddpg_update():
+        q_c = wandb.run.summary.get("Q-composed")
+        learning_rate_reducer = (1.0 - q_c) if q_c else 1.0
+        pi_optimizer.learning_rate.assign(hp.pi_lr*learning_rate_reducer)
+        q_optimizer.learning_rate.assign(hp.q_lr*learning_rate_reducer)
         for train_step in range(hp.train_steps):
             batch = replay_buffer.sample_batch(hp.batch_size, np_random=np_random)
             obs1 = tf.constant(batch["obs1"])
@@ -382,6 +386,7 @@ def ddpg(
 
             # target update
             target_update()
+        return qs_c, q_c
 
     start_time = time.time()
     o, info = env.reset()
@@ -446,7 +451,7 @@ def ddpg(
             Perform all DDPG updates at the end of the trajectory,
             in accordance with tuning done by TD3 paper authors.
             """
-            ddpg_update()
+            qs_c, q_c = ddpg_update()
 
         # End of epoch wrap-up
         if t > hp.start_steps and t % hp.steps_per_epoch == 0:
@@ -461,8 +466,9 @@ def ddpg(
             # test_agent()
 
             # Log info about epoch
-            logger.log_tabular("Epoch", epoch)
             weights_and_biases.log({"Epoch": epoch}, step=t)
+
+            logger.log_tabular("Epoch", epoch)
             logger.log_tabular("EpLen", average_only=True)
             logger.log_tabular("OrigEpRet", average_only=True)
             for i in range(rew_dims):
@@ -471,7 +477,7 @@ def ddpg(
             logger.log_tabular("TotalEnvInteracts", t)
             # logger.log_tabular("before_clip", average_only=True)
             # logger.log_tabular("Qs", average_only=True)
-            for i in range(rew_dims):
+            for i in range(qs_c.shape[0]):
                 logger.log_tabular(f"Q{i}", average_only=True)
             logger.log_tabular("Q_comp", average_only=True)
             logger.log_tabular("Q_before_clip_c", average_only=True)
