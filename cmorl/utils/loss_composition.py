@@ -67,6 +67,10 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtyp
     clip_t = tf.clip_by_value(p_meaned, tf.reduce_min(l), tf.reduce_max(l)) # prevent negative outputs
     return p_meaned + tf.stop_gradient(clip_t - p_meaned)
 
+@tf.function
+def simple_p_mean(l: tf.Tensor, p: float) -> tf.Tensor:
+    return tf.reduce_mean(l**p)**(1.0/p)
+
 # @tf.custom_gradient
 # def fixed_grad_p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None, dtype=tf.float64):
 #     return p_mean(l, p, slack, default_val, axis, dtype), lambda dy: dy * tf.ones_like(l), None, None, None
@@ -127,6 +131,7 @@ def move_towards_range(x, min, max):
 def then(x, y, slack=0.2, p=0.0):
     # return tf.minimum(1.0, 1.0 - x + y)
     return p_mean([x,slack+y*(1-slack)], p=p)
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     with tf.GradientTape() as gt:

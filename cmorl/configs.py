@@ -2,7 +2,7 @@ from functools import partial
 from typing import Callable
 
 import gymnasium
-import gymnasium.wrappers
+from gymnasium.wrappers import TimeLimit
 
 from cmorl.rl_algs.ddpg.hyperparams import HyperParams, combine, default_hypers
 from cmorl.utils.reward_utils import CMORL
@@ -22,7 +22,7 @@ class FixSleepingLander(gymnasium.Wrapper):
             done = False
         return obs, reward, done, truncated, info
     
-class ForcedTimeLimit(gymnasium.wrappers.TimeLimit):
+class ForcedTimeLimit(TimeLimit):
     def step(self, action):
         obs, reward, done, _, info = super().step(action)
         truncated = self._elapsed_steps >= self._max_episode_steps
@@ -67,11 +67,10 @@ env_configs: dict[str, Config] = {
             gamma=0.99,
             epochs=50,
             polyak=0.99,
-            # max_episode_len=400
             # p_objectives=0.0,
             # p_batch=1.0,
         ),
-        wrapper=FixSleepingLander,
+        wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),
 }
 
