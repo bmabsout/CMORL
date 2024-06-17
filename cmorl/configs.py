@@ -67,6 +67,7 @@ env_configs: dict[str, Config] = {
             gamma=0.99,
             epochs=50,
             polyak=0.99,
+            # max_episode_len=400
             # p_objectives=0.0,
             # p_batch=1.0,
         ),
