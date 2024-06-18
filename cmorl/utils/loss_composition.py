@@ -68,8 +68,8 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtyp
     return p_meaned + tf.stop_gradient(clip_t - p_meaned)
 
 @tf.function
-def simple_p_mean(l: tf.Tensor, p: float) -> tf.Tensor:
-    return tf.reduce_mean(l**p)**(1.0/p)
+def simple_p_mean(l: tf.Tensor, p: float, axis=0) -> tf.Tensor:
+    return tf.reduce_mean(l**p, axis=axis)**(1.0/p)
 
 # @tf.custom_gradient
 # def fixed_grad_p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None, dtype=tf.float64):
