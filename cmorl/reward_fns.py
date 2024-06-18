@@ -51,24 +51,30 @@ def multi_dim_pendulum(transition: Transition, env, setpoint) -> np.ndarray:
 
 def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
     nearness = 1.0 - np.clip(
-        (np.linalg.norm(transition.next_state[0:1]) / env.observation_space.high[0]), 0.0, 1.0 # type: ignore
+        np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
     )
-    very_nearness = 1.0 - 10*np.clip(
-        (np.linalg.norm(transition.next_state[0:1]) / env.observation_space.high[0]), 0.0, 0.099 # type: ignore
+    very_nearness = 1.0 - np.clip(
+        np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
     )
-    speed = transition.next_state[3:4] / env.observation_space.high[3] # type: ignore
+    speed = transition.next_state[2:4] / env.observation_space.high[2:4] # type: ignore
     minize_speed_near_ground = 1.0 - np.clip(np.linalg.norm(speed)*10.0, 0.0, 1.0)
     legs = transition.next_state[6:8]*minize_speed_near_ground
     fuel_costs = 1.0 - np.abs(transition.action/env.action_space.high) # type: ignore
-    return np.concatenate([[nearness**4.0, very_nearness], fuel_costs, legs])
+    # return np.concatenate([[nearness**4.0, very_nearness**2.0], fuel_costs, legs])
+    return np.concatenate([[nearness**4.0], fuel_costs, legs])
+    # return np.concatenate([[nearness**4.0]])
+    # return legs
 
 @tf.function
 def lander_composer(q_values, p_batch=0, p_objectives=-4.0):
     qs_c = p_mean(q_values, p=p_batch, axis=0)
-    nearness = then(qs_c[0], qs_c[1], slack=0.01)
-    legs_touch = (p_mean(qs_c[4:6], p=0.0))
-    fuel_cost = p_mean(tf.clip_by_value(qs_c[2:4]+0.9, 0.0, 1.0), p=0.0)
-    q_c = p_mean([then(nearness, legs_touch, slack=1e-3), fuel_cost], p=p_objectives)
+    # nearness = p_mean(qs_c[0:2]**0.5, p=0.0)
+    nearness=(1-(1-qs_c[0])**4.0)
+    legs_touch = p_mean(qs_c[3:5], p=0.0)**0.25
+    fuel_cost = 1.0 - (1-p_mean(qs_c[1:3], p=0.0))**10
+    # schedule = then(nearness, legs_touch, slack=1e-3)
+    q_c = p_mean([nearness, legs_touch, fuel_cost], p=p_objectives)
+    # q_c = legs_touch
     # q_c = 1-(1-p_mean([qs_c[0], qs_c[1], qs_c[2]**0.2, 0.01+0.99*qs_c[3], 0.01+0.99*qs_c[4]], p=p_objectives))**2.0
     # # q_c = p_mean(qs_c, p=p_objectives)
-    return tf.stack([nearness, legs_touch, fuel_cost]), (1.0 - (1.0 - q_c)**2.0)
+    return tf.concat([qs_c, [nearness, legs_touch]],axis=0), q_c #(1.0 - (1.0 - q_c)**2.0)
