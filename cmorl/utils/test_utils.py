@@ -63,10 +63,10 @@ def folder_to_results(env, render, num_tests, folder_path, force_truncate_at=Non
         return add_noise_to_weights(x, saved_actor, env.action_space, 0.0, np_random)
     def critic(o, a):
         return saved_critic(np.hstack([o, a], dtype=np.float32))
-    runs = np.array([
+    runs = [
         test(actor, critic, env, seed=17 + i, render=render, force_truncate_at=force_truncate_at, cmorl=cmorl, max_ep_len=max_ep_len)
         for i in range(num_tests)
-    ])
+    ]
     return runs
 
 

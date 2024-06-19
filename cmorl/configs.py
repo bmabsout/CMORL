@@ -39,16 +39,16 @@ env_configs: dict[str, Config] = {
         wrapper=partial(ForcedTimeLimit, max_episode_steps=100),
     ),
     "Ant-v4": Config(
-        CMORL(partial(reward_fns.mujoco_multi_dim_reward_joints_x_velocity)),
+        reward_fns.mujoco_CMORL(num_actions=8),
         HyperParams(pi_lr=1e-3, q_lr=1e-3, env_args={"use_contact_forces": True}, epochs=100, ac_kwargs={"critic_hidden_sizes": (512, 512), "actor_hidden_sizes": (64, 64)}),
     ),
     "Hopper-v4": Config(
-        CMORL(partial(reward_fns.mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=2.0)),
-        HyperParams(gamma=0.99, pi_lr=1e-3, q_lr=1e-3, epochs=60),
+        reward_fns.mujoco_CMORL(speed_multiplier=0.5, num_actions=3),
+        HyperParams(gamma=0.99, epochs=60, p_batch=1.0, polyak=0.99, replay_size=int(1e5)),
     ),
     "HalfCheetah-v4": Config(
-        CMORL(partial(reward_fns.mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=0.15)),
-        HyperParams(gamma=0.99, epochs=200, pi_lr=1e-3, q_lr=1e-3),
+        reward_fns.mujoco_CMORL(speed_multiplier=0.15, num_actions=6),
+        HyperParams(gamma=0.99, epochs=200, p_objectives=-4.0),
     ),
     "Pendulum-v1": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0))

@@ -1,8 +1,9 @@
+from functools import partial
 import numpy as np
 import tensorflow as tf
 
 from cmorl.utils.loss_composition import p_mean, then
-from cmorl.utils.reward_utils import  Transition
+from cmorl.utils.reward_utils import  CMORL, Transition
 from gymnasium.envs.box2d.lunar_lander import LunarLander
 from gymnasium.envs.mujoco.reacher import ReacherEnv
 from gymnasium.envs.mujoco.mujoco_env import MujocoEnv
@@ -14,7 +15,17 @@ def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: Mujoc
     x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
     env.prev_xpos = np.copy(env.data.xpos) # type: ignore
     forward_rw = np.clip(x_velocities[1:, 0]*speed_multiplier, 0.0, 1.0)
-    return np.hstack([forward_rw, action_rw**0.5])
+    return np.hstack([forward_rw, action_rw])
+
+def mujoco_CMORL(speed_multiplier=1.0, num_actions=3):
+    @tf.function
+    def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
+        qs_c = p_mean(q_values, p=p_batch, axis=0)
+        forward = p_mean(qs_c[0:-num_actions], p=0.0)
+        action = 1-(1-p_mean(qs_c[-num_actions:], p=0.0))**5.0
+        q_c = p_mean((forward, action), p=p_objectives)
+        return qs_c, (1.0 - (1-q_c)**2.0)
+    return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=speed_multiplier), mujoco_composer)
 
 def composed_reward_fn(transition, env):
     rew_vec = mujoco_multi_dim_reward_joints_x_velocity(transition, env)
@@ -54,7 +65,7 @@ def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
         np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
     )
     very_nearness = 1.0 - np.clip(
-        np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
+        10*np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
     )
     speed = transition.next_state[2:4] / env.observation_space.high[2:4] # type: ignore
     minize_speed_near_ground = 1.0 - np.clip(np.linalg.norm(speed)*10.0, 0.0, 1.0)

@@ -119,7 +119,7 @@ def critic(
 
     # name the layer before sigmoid
     before_clip = Lambda(lambda x: x**2.0, name="before_clip", output_shape=lambda o:o)(outputs)
-    # before_clip =  RescalingFixed(1.0, offset=0.0, name="before_clip")(outputs)
+    # before_clip =  RescalingFixed(1.0, offset=0.3, name="before_clip")(outputs)
 
     biased_normed = ClipLayer(0.0, 1.0)(before_clip)
     model = keras.Model(inputs, biased_normed)
@@ -133,7 +133,7 @@ def mlp_actor_critic(
     rwds_dim: int,
     obs_normalizer=None,
     actor_hidden_sizes=(32, 32),
-    critic_hidden_sizes=(64, 64, 64),
+    critic_hidden_sizes=(400, 300),
     seed=42
 ) -> tuple[Model, Model]:
     if obs_normalizer is None:
