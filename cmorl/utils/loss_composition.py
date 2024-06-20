@@ -89,9 +89,11 @@ def p_to_min(l, p=0, q=0):
 #     return tf.abs(with_mixer(a1)-with_mixer(a2))/2.0
 
 
-@tf.function
-def laplace_smoothing(weaken_me, weaken_by):
-    return (weaken_me + weaken_by) / (1.0 + weaken_by)
+@tf.custom_gradient
+def soft(weaken_me, weaken_by=1.0):
+    def grad_passthrough(dy):
+        return dy
+    return (weaken_me / (tf.abs(weaken_me) + weaken_by)), grad_passthrough
 
 
 @tf.custom_gradient
