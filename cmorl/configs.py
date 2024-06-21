@@ -44,7 +44,7 @@ env_configs: dict[str, Config] = {
     ),
     "Hopper-v4": Config(
         reward_fns.mujoco_CMORL(speed_multiplier=0.5, num_actions=3),
-        HyperParams(gamma=0.99, epochs=60, p_batch=1.0, polyak=0.99, replay_size=int(1e5), act_noise=0.05),
+        HyperParams(gamma=0.99, epochs=60, p_batch=0.5, polyak=0.99, replay_size=int(1e5)),
     ),
     "HalfCheetah-v4": Config(
         reward_fns.mujoco_CMORL(speed_multiplier=0.15, num_actions=6),
