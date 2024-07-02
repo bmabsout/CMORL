@@ -8,6 +8,8 @@ from gymnasium.envs.box2d.lunar_lander import LunarLander
 from gymnasium.envs.mujoco.reacher import ReacherEnv
 from gymnasium.envs.mujoco.mujoco_env import MujocoEnv
 
+from envs.Bittle.opencat_gym_env import OpenCatGymEnv
+
 def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: MujocoEnv, speed_multiplier=1.0):
     action_rw = (1.0 - np.abs(transition.action))
     if not hasattr(env, "prev_xpos"):
@@ -16,6 +18,13 @@ def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: Mujoc
     env.prev_xpos = np.copy(env.data.xpos) # type: ignore
     forward_rw = np.clip(x_velocities[1:, 0]*speed_multiplier, 0.0, 1.0)
     return np.hstack([forward_rw, action_rw])
+
+
+def bittle_rw(transition: Transition, env: OpenCatGymEnv):
+    forward = transition.info.get("forward", 0.0)
+    change_direction = transition.info.get("change_direction", env.action_space.low*0.0)
+    body_stability = transition.info.get("body_stability", np.zeros(3))
+    return np.hstack([[forward], change_direction])
 
 def mujoco_CMORL(speed_multiplier=1.0, num_actions=3):
     @tf.function

@@ -73,6 +73,10 @@ env_configs: dict[str, Config] = {
         ),
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),
+    "Bittle-custom": Config(
+        CMORL(reward_fns.bittle_rw),
+        HyperParams(gamma=0.99),
+    ),
 }
 
 def get_env_and_config(env_name: str) -> tuple[Callable[..., gymnasium.Env], Config]:
