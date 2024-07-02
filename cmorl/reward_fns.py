@@ -25,6 +25,7 @@ def bittle_rw(transition: Transition, env: OpenCatGymEnv):
     change_direction = transition.info.get("change_direction", env.action_space.low*0.0)
     body_stability = transition.info.get("body_stability", np.zeros(3))
     return np.hstack([[forward], change_direction])
+    # return np.array([forward])
 
 def mujoco_CMORL(speed_multiplier=1.0, num_actions=3):
     @tf.function

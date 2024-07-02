@@ -245,14 +245,14 @@ def ddpg(
             keep_in_range = p_mean(
                 move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
             )
-            error = tf.abs(outputs["before_clip"] - backup)
+            error = tf.abs(outputs["q"] - backup)
             # error = tf.abs(outputs["before_clip"] - backup)
             # smooth_max_errors = tf.stop_gradient(p_mean(error, p=10.0, axis=0)) +1e-7
             # q_bellman_c = p_mean(estimated_std/(estimated_std + p_mean(error, p = 2.0, axis=0)), p=0.0)
             q_bellman_c = 1.0 - p_mean(p_mean(error, p=2.0, axis=0), p=1.0)
             # q_bellman_c = p_mean(1e-6*p_mean(error, p=2.0)/(estimated_spread**0.5 + 1e-6), p=1.0)
             # tf.print(p_mean(error, p=2.0, axis=0)/smooth_max_errors)
-            q_direct_c = 1.0 - p_mean(p_mean(outputs["before_clip"] - estimated_values, p=2.0), p=1.0)
+            q_direct_c = 1.0 - p_mean(p_mean(outputs["q"] - estimated_values, p=2.0), p=1.0)
             # q_bellman_batch = p_mean( tf.abs(q - backup), p=4.0, axis=0, dtype=tf.float32)
             # q_bellman_c = p_mean(1.0 - 0.01*q_bellman_batch/tf.maximum(0.01, estimated_std), p=0.0)
             # q_bellman_c = p_mean(1.0 - q_bellman_batch, p=-4.0)

@@ -75,7 +75,10 @@ env_configs: dict[str, Config] = {
     ),
     "Bittle-custom": Config(
         CMORL(reward_fns.bittle_rw),
-        HyperParams(gamma=0.99),
+        HyperParams(
+            gamma=0.99,
+            ac_kwargs={"critic_hidden_sizes": (1024, 512), "actor_hidden_sizes": (128, 128)}
+        ),
     ),
 }
 
