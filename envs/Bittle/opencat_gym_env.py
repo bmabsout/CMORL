@@ -78,11 +78,11 @@ class OpenCatGymEnv(gym.Env):
         self.observation_space = gym.spaces.Box(np.array([-1]*SIZE_OBSERVATION), 
                                                 np.array([1]*SIZE_OBSERVATION))
 
-    def _get_obs(self, action):
+    def _get_obs(self):
         state_vel, state_angvel = map(np.asarray, p.getBaseVelocity(self.robot_id))
         state_vel = np.clip(state_vel*10.0, -1.0 , 1.0)
         state_angvel_clip = np.clip(state_angvel*ANG_FACTOR, -1, 1)
-        self.state_robot = np.concatenate((state_vel, state_angvel_clip, action))
+        self.state_robot = np.concatenate((state_vel, state_angvel_clip))
         return self.state_robot
 
     def step(self, action):
@@ -109,6 +109,39 @@ class OpenCatGymEnv(gym.Env):
         # Simulate delay for data transfer. Delay has to be modeled to close 
         # "reality gap").
         p.stepSimulation()
+
+        # Check for friction of paws, to prevent slipping while training.
+        paw_contact = []
+        paw_idx = [3, 6, 9, 12]
+        for idx in paw_idx:
+            paw_contact.append(True if p.getContactPoints(bodyA=self.robot_id, 
+                                                          linkIndexA=idx) 
+                                    else False)
+
+        paw_slipping = 0
+        for in_contact in np.nonzero(paw_contact)[0]:
+            paw_slipping += np.linalg.norm((
+                            p.getLinkState(self.robot_id,
+                                           linkIndex=paw_idx[in_contact], 
+                                           computeLinkVelocity=1)[0][0:1]))
+
+        # Read clearance of paw from ground
+        paw_clearance = 0
+        for idx in paw_idx:
+            paw_z_pos = p.getLinkState(self.robot_id, linkIndex=idx)[0][2]
+            paw_clearance += (paw_z_pos-PAW_Z_TARGET)**2 * np.linalg.norm(
+                (p.getLinkState(self.robot_id, linkIndex=idx, 
+                                computeLinkVelocity=1)[0][0:1]))**0.5
+
+        # Check if elbows or lower arm are in contact with ground
+        arm_idx = [1, 2, 4, 5]
+        for idx in arm_idx:
+            if p.getContactPoints(bodyA=self.robot_id, linkIndexA=idx):
+                self.arm_contact += 1
+
+        # Read clearance of torso from ground
+        base_clearance = p.getBasePositionAndOrientation(self.robot_id)[0][2]
+
         # Set new joint angles
         p.setJointMotorControlArray(self.robot_id, 
                                     self.joint_id, 
@@ -133,13 +166,26 @@ class OpenCatGymEnv(gym.Env):
         joint_angs_prev = self.recent_angles[8:16]
         joint_angs_prev_prev = self.recent_angles[0:8]
 
+        # Read robot state (pitch, roll and their derivatives of the torso).
+        state_pos, state_ang = p.getBasePositionAndOrientation(self.robot_id)
         p.stepSimulation() # Emulated delay of data transfer via serial port
-        current_position = p.getBasePositionAndOrientation(self.robot_id)[0][0]
+        state_ang_euler = np.asarray(p.getEulerFromQuaternion(state_ang)[0:2])
+        state_angvel = np.asarray(p.getBaseVelocity(self.robot_id)[1])
+        state_vel = np.clip(np.asarray(p.getBaseVelocity(self.robot_id)[0]), -1.0 , 1.0)
+        state_angvel = state_angvel[0:3]*ANG_FACTOR
+        state_angvel_clip = np.clip(state_angvel, -1, 1)
+        self.state_robot = np.concatenate((state_vel, state_angvel_clip))
+        current_position = p.getBasePositionAndOrientation(self.robot_id)[0][0] 
         movement_forward = current_position - last_position
         # joints = np.clip(np.mean(1.0 - np.abs(action)), 1e-3, 1.0)**0.5
         # print("actions:", )
         forward = np.clip(movement_forward*300, 1e-3, 1.0)
         body_stability = 1.0 - np.clip(np.asarray(p.getBaseVelocity(self.robot_id)[1])*ANG_FACTOR, 0.0, 1.0)
+        # print("joints:", joints)
+        # print("forward:", forward)
+        # if self.__getattribute__("action_prev") is not None:
+        #     self.action_prev_prev = self.action_prev
+        #     self.action_prev = action
         change_direction = np.sign(joint_angs-joint_angs_prev) == np.sign(joint_angs_prev-joint_angs_prev_prev)
         # reward = (forward*change_direction*body_stability*joints)**(1.0/4.0)
         reward = 0.0
@@ -210,7 +256,21 @@ class OpenCatGymEnv(gym.Env):
             i = i+1
 
         # Normalize joint angles.
-        joint_angs /= self.bound_ang
+        joint_angs[0] /= self.bound_ang
+        joint_angs[1] /= self.bound_ang
+        joint_angs[2] /= self.bound_ang
+        joint_angs[3] /= self.bound_ang
+        joint_angs[4] /= self.bound_ang
+        joint_angs[5] /= self.bound_ang
+        joint_angs[6] /= self.bound_ang
+        joint_angs[7] /= self.bound_ang
+
+        # Read robot state (pitch, roll and their derivatives of the torso)
+        state_ang = p.getBasePositionAndOrientation(self.robot_id)[1]
+        state_angvel = np.asarray(p.getBaseVelocity(self.robot_id)[1])
+        state_angvel = state_angvel[0:2]*ANG_FACTOR
+        self.state_robot = np.concatenate((state_ang, 
+                                           np.clip(state_angvel, -1, 1)))
 
         # Initialize robot state history with reset position
         state_joints = np.asarray(
