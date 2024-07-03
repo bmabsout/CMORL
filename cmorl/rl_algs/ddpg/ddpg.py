@@ -249,7 +249,7 @@ def ddpg(
             # error = tf.abs(outputs["before_clip"] - backup)
             # smooth_max_errors = tf.stop_gradient(p_mean(error, p=10.0, axis=0)) +1e-7
             # q_bellman_c = p_mean(estimated_std/(estimated_std + p_mean(error, p = 2.0, axis=0)), p=0.0)
-            q_bellman_c = 1.0 - p_mean(p_mean(error, p=2.0, axis=0), p=1.0)
+            q_bellman_c = 1.0 - p_mean(error, p=2.0)
             # q_bellman_c = p_mean(1e-6*p_mean(error, p=2.0)/(estimated_spread**0.5 + 1e-6), p=1.0)
             # tf.print(p_mean(error, p=2.0, axis=0)/smooth_max_errors)
             q_direct_c = 1.0 - p_mean(p_mean(outputs["q"] - estimated_values, p=2.0), p=1.0)

@@ -7,21 +7,6 @@ import pybullet
 
 # Constants to define training and visualisation.
 
-EPISODE_LENGTH = 250      # Number of steps for one training episode
-MAXIMUM_LENGTH = 1.8e6    # Number of total steps for entire training
-
-# Factors to weight rewards and penalties.
-PENALTY_STEPS = 2e6       # Increase of penalty by step_counter/PENALTY_STEPS
-FAC_MOVEMENT = 1000       # Reward movement in x-direction
-FAC_STABILITY = 0.1       # Punish body roll and pitch velocities
-FAC_Z_VELOCITY = 0.0      # Punish z movement of body
-FAC_SLIP = 0.0            # Punish slipping of paws
-FAC_ARM_CONTACT = 0.01    # Punish crawling on arms and elbows
-FAC_SMOOTH_1 = 1.0        # Punish jitter and vibrational movement, 1st order
-FAC_SMOOTH_2 = 1.0        # Punish jitter and vibrational movement, 2nd order
-FAC_CLEARANCE = 0.0       # Factor to enfore foot clearance to PAW_Z_TARGET
-PAW_Z_TARGET = 0.005      # Target height (m) of paw during swing phase
-
 BOUND_ANG = 110         # Joint maximum angle (deg)
 STEP_ANGLE = 11           # Maximum angle (deg) delta per step
 ANG_FACTOR = 0.1          # Improve angular velocity resolution before clip.
@@ -33,12 +18,12 @@ RANDOM_MASS = 0           # Percent, currently inactive
 RANDOM_FRICTION = 0       # Percent, currently inactive
 
 LENGTH_RECENT_ANGLES = 3  # Buffer to read recent joint angles
-LENGTH_HISTORY = 10 # Number of steps to state history
+LENGTH_HISTORY = 4 # Number of steps to state history
 
-# Size of oberservation space is set up of: 
-# [LENGTH_JOINT_HISTORY, quaternion, gyro]
-# SIZE_OBSERVATION = LENGTH_JOINT_HISTORY * 8 + 6 + 3
-SIZE_OBSERVATION = 3+3+8
+# SIZE_OBSERVATION = 3+3+8
+SIZE_OBSERVATION = 3+3+1
+# TOTAL_OBSERVATION = SIZE_OBSERVATION*LENGTH_HISTORY
+TOTAL_OBSERVATION = SIZE_OBSERVATION
 
 
 class OpenCatGymEnv(gym.Env):
@@ -49,8 +34,7 @@ class OpenCatGymEnv(gym.Env):
 
     def __init__(self, render_mode=None):
         self.step_counter = 0
-        self.step_counter_session = 0
-        self.state_history = np.zeros(SIZE_OBSERVATION*LENGTH_HISTORY)
+        self.state_history = []
         self.angle_history = np.array([])
         self.bound_ang = np.deg2rad(BOUND_ANG)
 
@@ -73,27 +57,34 @@ class OpenCatGymEnv(gym.Env):
         # The action space are the 8 joint angles.
         self.action_space = gym.spaces.Box(np.array([-1]*8), np.array([1]*8))
 
-        high = np.ones(SIZE_OBSERVATION*LENGTH_HISTORY)
+        high = np.ones(TOTAL_OBSERVATION)
         self.observation_space = gym.spaces.Box(high = high, low = -high)
 
     def _get_obs(self, action):
         state_vel, state_angvel = map(np.asarray, p.getBaseVelocity(self.robot_id))
         state_vel = np.clip(state_vel, -1.0 , 1.0)
         state_angvel_clip = np.clip(state_angvel*ANG_FACTOR, -1.0, 1.0)
-        self.state_robot = np.concatenate((state_vel, state_angvel_clip, action))
-        self.state_history = np.append(self.state_robot, self.state_history)[:-SIZE_OBSERVATION]
-        return self.state_history
+        # self.state_robot = np.concatenate((state_vel, state_angvel_clip, action))
+        time_obs = np.fmod(self.step_counter/100.0, 1.0)
+        self.state_robot = np.concatenate((state_vel, state_angvel_clip, [time_obs]))
+        # self.state_history.append(self.state_robot)
+        # obs = np.array((self.state_history[0:2] + self.state_history[2::3])[:LENGTH_HISTORY]).flatten()
+        # padded_obs = np.zeros(TOTAL_OBSERVATION)
+        # padded_obs[:len(obs)] = obs
+        # return padded_obs
+        return self.state_robot
 
     def step(self, action):
+        self.step_counter += 1
         p.configureDebugVisualizer(p.COV_ENABLE_SINGLE_STEP_RENDERING)
         last_position = p.getBasePositionAndOrientation(self.robot_id)[0][0]
-        joint_angs = np.asarray(p.getJointStates(self.robot_id, self.joint_id),
+        joint_angs = np.asarray(p.getJointStates(self.robot_id, self.joint_ids),
                                                    dtype=object)[:,0]
         # shoulder_left, elbow_left, shoulder_right, elbow_right, hip_right, knee_right, hip_left, knee_left
         ds = np.deg2rad(STEP_ANGLE) # Maximum change of angle per step
+        joint_angs = joint_angs + np.clip(action*self.bound_ang - joint_angs, -1.0, 1.0) * ds # Change per step including agent action
+        # joint_angs = action*self.bound_ang
 
-        joint_angs += np.clip(action - joint_angs, -1.0, 1.0) * ds # Change per step including agent action
-        
         min_ang = -self.bound_ang
         max_ang = self.bound_ang
 
@@ -110,7 +101,7 @@ class OpenCatGymEnv(gym.Env):
         p.stepSimulation()
         # Set new joint angles
         p.setJointMotorControlArray(self.robot_id, 
-                                    self.joint_id, 
+                                    self.joint_ids, 
                                     p.POSITION_CONTROL, 
                                     joint_angs, 
                                     forces=np.ones(8)*0.2)
@@ -129,7 +120,6 @@ class OpenCatGymEnv(gym.Env):
         current_position = p.getBasePositionAndOrientation(self.robot_id)[0][0]
         movement_forward = current_position - last_position
         # joints = np.clip(np.mean(1.0 - np.abs(action)), 1e-3, 1.0)**0.5
-        # print("actions:", )
         forward = np.clip(movement_forward*300, 1e-3, 1.0)
         body_stability = 1.0 - np.clip(np.asarray(p.getBaseVelocity(self.robot_id)[1])*ANG_FACTOR, 0.0, 1.0)
         change_direction = np.sign(joint_angs-joint_angs_prev) == np.sign(joint_angs_prev-joint_angs_prev_prev)
@@ -140,16 +130,7 @@ class OpenCatGymEnv(gym.Env):
         truncated = False
         info = {"forward": forward, "change_direction": change_direction, "body_stability": body_stability}
         # Stop criteria of current learning episode: 
-        # Number of steps or robot fell.
-        self.step_counter += 1
-        if self.step_counter > EPISODE_LENGTH:
-            self.step_counter_session += self.step_counter
-            terminated = False
-            truncated = True
-
-        elif self.is_fallen(): # Robot fell
-            self.step_counter_session += self.step_counter
-            reward = 0
+        if self.is_fallen(): # Robot fell
             terminated = True
             truncated = False
 
@@ -178,14 +159,14 @@ class OpenCatGymEnv(gym.Env):
                                    flags=p.URDF_USE_SELF_COLLISION) 
         
         # Initialize urdf links and joints.
-        self.joint_id = []
+        self.joint_ids = []
         #paramIds = []
         for j in range(p.getNumJoints(self.robot_id)):
             joint_type = p.getJointInfo(self.robot_id, j)[2]
 
             if (joint_type == p.JOINT_PRISMATIC 
                 or joint_type == p.JOINT_REVOLUTE):
-                self.joint_id.append(j)
+                self.joint_ids.append(j)
                 #paramIds.append(p.addUserDebugParameter(joint_name.decode("utf-8")))
                 # Limiting motor dynamics. Although bittle's dynamics seem to 
                 # be be quite high like up to 7 rad/s.
@@ -194,20 +175,15 @@ class OpenCatGymEnv(gym.Env):
         # Setting start position. This influences training.
         joint_angs = np.deg2rad(np.array([1, 0, 1, 0, 1, 0, 1, 0])*50) 
 
-        i = 0
-        for j in self.joint_id:
-            p.resetJointState(self.robot_id,j, joint_angs[i])
-            i = i+1
-
-        # Normalize joint angles.
-        joint_angs /= self.bound_ang
+        for i, joint_id in enumerate(self.joint_ids):
+            p.resetJointState(self.robot_id, joint_id, joint_angs[i])
 
         # Initialize robot state history with reset position
         state_joints = np.asarray(
-            p.getJointStates(self.robot_id, self.joint_id), dtype=object)[:,0]
+            p.getJointStates(self.robot_id, self.joint_ids), dtype=object)[:,0]
         state_joints /= self.bound_ang 
         
-        self.state_history = np.zeros(SIZE_OBSERVATION*LENGTH_HISTORY)
+        self.state_history = []
         self.recent_angles = np.tile(state_joints, LENGTH_RECENT_ANGLES)
         self.observation = self._get_obs(self.action_space.low*0.0)
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,1)

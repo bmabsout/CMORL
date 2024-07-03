@@ -21,9 +21,11 @@ def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: Mujoc
 
 
 def bittle_rw(transition: Transition, env: OpenCatGymEnv):
+    action_rw = (1.0 - np.abs(transition.action))
     forward = transition.info.get("forward", 0.0)
     change_direction = transition.info.get("change_direction", env.action_space.low*0.0)
     body_stability = transition.info.get("body_stability", np.zeros(3))
+    # return np.hstack([[forward], change_direction, action_rw])
     return np.hstack([[forward], change_direction])
     # return np.array([forward])
 

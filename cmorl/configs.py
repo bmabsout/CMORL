@@ -77,7 +77,9 @@ env_configs: dict[str, Config] = {
         CMORL(reward_fns.bittle_rw),
         HyperParams(
             gamma=0.99,
-            ac_kwargs={"critic_hidden_sizes": (1024, 512), "actor_hidden_sizes": (128, 128)}
+            act_noise=0.05,
+            ac_kwargs={"critic_hidden_sizes": (512, 512), "actor_hidden_sizes": (64, 64)},
+            max_ep_len=400,
         ),
     ),
 }
