@@ -17,7 +17,9 @@ def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmor
     actions = []
     while(True):
         action = actor(o, np_random)
+        print(action)
         actions.append(action)
+        # print(o)
         os.append(o)
         o2, r, d, t, i = env.step(action)
         rs.append(r)
