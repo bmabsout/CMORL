@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import reduce
 from pathlib import Path
 import time
@@ -7,6 +7,7 @@ import tensorflow as tf
 
 from cmorl.utils.args_utils import Arg_Serializer, Serialized_Argument, namespace_serializer
 
+@dataclass(init=False) # so the type system shows the options
 class HyperParams(Namespace):
     ac_kwargs      : dict[str, object]
     prev_folder    : None | Path
@@ -25,8 +26,11 @@ class HyperParams(Namespace):
     train_every    : int
     train_steps    : int
     p_batch        : float
+    q_batch        : float
+    q_objectives   : float
     p_objectives   : float
-    env_args       : dict[str, object] = {}
+    qd_power       : float
+    env_args       : dict[str, object]
     # noise_schedule : tf.keras.optimizers.schedules.LearningRateSchedule
 
 
@@ -48,7 +52,9 @@ descriptions: dict[str,  str] = {
     "train_every": "Number of steps to wait before training",
     "train_steps": "Number of training steps to take",
     "p_batch": "The p-value for composing the Q-values across the batch",
-    "p_objectives": "The p-value for composing the Q-values across the objectives"
+    "p_objectives": "The p-value for composing the Q-values across the objectives",
+    "q_batch": "The p-mean value for critic error's batch",
+    "q_objectives": "The p-mean value for composing the different critic's q-value errors"
 }
 
 abbreviations = {
@@ -57,7 +63,10 @@ abbreviations = {
     "epochs": "e",
     "gamma": "g",
     "p_batch": "p_b",
-    "p_objectives": "p_o"
+    "p_objectives": "p_o",
+    "q_batch": "q_b",
+    "q_objectives": "q_o",
+    "qd_power": "q_d"
 }
 
 def default_hypers():
@@ -79,7 +88,10 @@ def default_hypers():
         train_every     = 50,
         train_steps     = 30,
         p_batch         = 0.5,
-        p_objectives    = -4.0,
+        p_objectives    = 0.0,
+        q_batch         = 0.5,
+        q_objectives    = 0.0,
+        qd_power        = 0.5,
         env_args        = {}
     )
 

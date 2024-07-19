@@ -5,7 +5,7 @@ import gymnasium
 from gymnasium.wrappers import TimeLimit
 
 from cmorl.rl_algs.ddpg.hyperparams import HyperParams, combine, default_hypers
-from cmorl.utils.reward_utils import CMORL
+from cmorl.utils.reward_utils import CMORL, perf_schedule
 from cmorl import reward_fns
 
 class Config:
@@ -36,7 +36,7 @@ env_configs: dict[str, Config] = {
                 "obs_normalizer": [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 4.0, 4.0, 2.0, 2.0, 2.0],
             },
         ),
-        wrapper=partial(ForcedTimeLimit, max_episode_steps=100),
+        wrapper=partial(ForcedTimeLimit, max_episode_steps=200),
     ),
     "Ant-v4": Config(
         reward_fns.mujoco_CMORL(num_actions=8),
@@ -74,14 +74,14 @@ env_configs: dict[str, Config] = {
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),
     "Bittle-custom": Config(
-        CMORL(reward_fns.bittle_rw),
+        CMORL(reward_fns.bittle_rw, randomization_schedule=perf_schedule),
         HyperParams(
             gamma=0.99,
-            act_noise=0.01,
-            pi_lr=1e-3,
-            q_lr=1e-3,
+            act_noise=0.1,
             ac_kwargs={"critic_hidden_sizes": (512, 512), "actor_hidden_sizes": (64, 64)},
             max_ep_len=400,
+            p_batch=1.0,
+            qd_power=0.5
         ),
     ),
 }

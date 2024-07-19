@@ -4,6 +4,7 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 import pybullet
+from collections import deque
 
 # Constants to define training and visualisation.
 
@@ -18,10 +19,11 @@ RANDOM_MASS = 0           # Percent, currently inactive
 RANDOM_FRICTION = 0       # Percent, currently inactive
 
 LENGTH_RECENT_ANGLES = 3  # Buffer to read recent joint angles
-LENGTH_HISTORY = 4 # Number of steps to state history
+LENGTH_HISTORY = 3 # Number of steps to state history
 
 # SIZE_OBSERVATION = 3+3+8
-SIZE_OBSERVATION = 3+3+1
+OBSERVATION_HISTORY_ANGLES = 1
+SIZE_OBSERVATION = 3+3 + 8*OBSERVATION_HISTORY_ANGLES
 # TOTAL_OBSERVATION = SIZE_OBSERVATION*LENGTH_HISTORY
 TOTAL_OBSERVATION = SIZE_OBSERVATION
 
@@ -34,8 +36,8 @@ class OpenCatGymEnv(gym.Env):
 
     def __init__(self, render_mode=None):
         self.step_counter = 0
-        self.state_history = []
-        self.angle_history = np.array([])
+        self.state_history = deque(maxlen=LENGTH_HISTORY)
+        self.recent_angles = deque([[0.0]*8]*LENGTH_RECENT_ANGLES, maxlen=LENGTH_RECENT_ANGLES)
         self.bound_ang = np.deg2rad(BOUND_ANG)
 
         if render_mode=="human":
@@ -65,64 +67,64 @@ class OpenCatGymEnv(gym.Env):
         state_vel = np.clip(state_vel, -1.0 , 1.0)
         state_angvel_clip = np.clip(state_angvel*ANG_FACTOR, -1.0, 1.0)
         # self.state_robot = np.concatenate((state_vel, state_angvel_clip, action))
-        time_obs = np.fmod(self.step_counter/100.0, 1.0)
-        self.state_robot = np.concatenate((state_vel, state_angvel_clip, [time_obs]))
-        # self.state_history.append(self.state_robot)
+        # time_obs = np.fmod(self.step_counter/100.0, 1.0)
+        self.recent_angles.appendleft(self.get_observed_joints())
+        self.state_robot = np.concatenate([state_vel, state_angvel_clip] + list(self.recent_angles)[0:OBSERVATION_HISTORY_ANGLES])#, [time_obs]))
+        # self.state_history.appendleft(self.state_robot)
         # obs = np.array((self.state_history[0:2] + self.state_history[2::3])[:LENGTH_HISTORY]).flatten()
         # padded_obs = np.zeros(TOTAL_OBSERVATION)
         # padded_obs[:len(obs)] = obs
         # return padded_obs
         return self.state_robot
 
-    def step(self, action):
-        self.step_counter += 1
-        p.configureDebugVisualizer(p.COV_ENABLE_SINGLE_STEP_RENDERING)
-        last_position = p.getBasePositionAndOrientation(self.robot_id)[0][0]
-        joint_angs = np.asarray(p.getJointStates(self.robot_id, self.joint_ids),
+    def get_joint_angs(self):
+        return np.asarray(p.getJointStates(self.robot_id, self.joint_ids),
                                                    dtype=object)[:,0]
-        # shoulder_left, elbow_left, shoulder_right, elbow_right, hip_right, knee_right, hip_left, knee_left
-        ds = np.deg2rad(STEP_ANGLE) # Maximum change of angle per step
-        joint_angs = joint_angs + np.clip(action*self.bound_ang - joint_angs, -1.0, 1.0) * ds # Change per step including agent action
-        # joint_angs = action*self.bound_ang
-
-        min_ang = -self.bound_ang
-        max_ang = self.bound_ang
-
-        joint_angs = np.clip(joint_angs, min_ang, max_ang)
-
+    
+    def low_resolution_angs(self, joint_angs):
         # Transform angle to degree and perform rounding, because 
         # OpenCat robot have only integer values.
         joint_angsDeg = np.rad2deg(joint_angs.astype(np.float64))
         joint_angsDegRounded = joint_angsDeg.round()
-        joint_angs = np.deg2rad(joint_angsDegRounded)
+        return np.deg2rad(joint_angsDegRounded)
 
-        # Simulate delay for data transfer. Delay has to be modeled to close 
-        # "reality gap").
-        p.stepSimulation()
+    def get_observed_joints(self):
+        return self.low_resolution_angs(self.get_joint_angs())/self.bound_ang
+
+    def control_motors(self, action):
+        joint_angs = self.get_joint_angs()
+        ds = np.deg2rad(STEP_ANGLE) # Maximum change of angle per step
+        with_action = joint_angs + np.clip(action*self.bound_ang - joint_angs, -1.0, 1.0) * ds # Change per step including agent action
+        new_joint_angs = np.clip(self.low_resolution_angs(with_action), -self.bound_ang, self.bound_ang)
+        # # Simulate delay for data transfer. Delay has to be modeled to close 
+        # # "reality gap").
+        # p.stepSimulation()
         # Set new joint angles
-        p.setJointMotorControlArray(self.robot_id, 
-                                    self.joint_ids, 
-                                    p.POSITION_CONTROL, 
-                                    joint_angs, 
-                                    forces=np.ones(8)*0.2)
-        p.stepSimulation() # Delay of data transfer
+        p.setJointMotorControlArray(
+            self.robot_id, 
+            self.joint_ids, 
+            p.POSITION_CONTROL, 
+            new_joint_angs, 
+            forces=np.ones(8)*0.2
+        )
 
-        # Normalize joint_angs
-        joint_angs /= self.bound_ang
 
-        self.recent_angles = np.append(self.recent_angles, joint_angs)
-        self.recent_angles = np.delete(self.recent_angles, np.s_[0:8])
-
-        joint_angs_prev = self.recent_angles[8:16]
-        joint_angs_prev_prev = self.recent_angles[0:8]
-
+    def step(self, action):
+        self.step_counter += 1
+        # p.configureDebugVisualizer(p.COV_ENABLE_SINGLE_STEP_RENDERING)
+        last_position = p.getBasePositionAndOrientation(self.robot_id)[0][0]
+        
+        self.control_motors(action)
+        # p.stepSimulation() # Delay of data transfer
         p.stepSimulation() # Emulated delay of data transfer via serial port
+        self.observation = self._get_obs(action)
         current_position = p.getBasePositionAndOrientation(self.robot_id)[0][0]
         movement_forward = current_position - last_position
         # joints = np.clip(np.mean(1.0 - np.abs(action)), 1e-3, 1.0)**0.5
         forward = np.clip(movement_forward*300, 1e-3, 1.0)
-        body_stability = 1.0 - np.clip(np.asarray(p.getBaseVelocity(self.robot_id)[1])*ANG_FACTOR, 0.0, 1.0)
-        change_direction = np.sign(joint_angs-joint_angs_prev) == np.sign(joint_angs_prev-joint_angs_prev_prev)
+        angular_velocity = np.asarray(p.getBaseVelocity(self.robot_id)[1])
+        body_stability = 1.0 - np.clip(angular_velocity*ANG_FACTOR, 0.0, 1.0)
+        change_direction = np.sign(self.recent_angles[0]-self.recent_angles[1]) == np.sign(self.recent_angles[1]-self.recent_angles[2])
         # reward = (forward*change_direction*body_stability*joints)**(1.0/4.0)
         reward = 0.0
         # Set state of the current state.
@@ -133,8 +135,6 @@ class OpenCatGymEnv(gym.Env):
         if self.is_fallen(): # Robot fell
             terminated = True
             truncated = False
-
-        self.observation = self._get_obs(action)
 
         return (np.array(self.observation).astype(np.float32), 
                         reward, terminated, truncated, info)
@@ -183,8 +183,8 @@ class OpenCatGymEnv(gym.Env):
             p.getJointStates(self.robot_id, self.joint_ids), dtype=object)[:,0]
         state_joints /= self.bound_ang 
         
-        self.state_history = []
-        self.recent_angles = np.tile(state_joints, LENGTH_RECENT_ANGLES)
+        self.state_history = deque(maxlen=LENGTH_HISTORY)
+        self.recent_angles = deque([[0.0]*8]*LENGTH_RECENT_ANGLES, maxlen=LENGTH_RECENT_ANGLES)
         self.observation = self._get_obs(self.action_space.low*0.0)
         p.configureDebugVisualizer(p.COV_ENABLE_RENDERING,1)
         info = {}

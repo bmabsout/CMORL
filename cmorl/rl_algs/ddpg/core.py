@@ -56,8 +56,8 @@ class RescalingFixed(Rescaling):
     def __init__(self, scale, offset=0.0, **kwargs):
         if type(scale) is dict:
             scale = np.array(scale['config']['value'])
-        if type(scale) is dict:
-            scale = np.array(scale['config']['value'])
+        if type(offset) is dict:
+            offset = np.array(offset['config']['value'])
         super().__init__(scale, offset, **kwargs)
 
 

@@ -66,11 +66,19 @@ def default_q_composer(q_values, p_batch=0, p_objectives=-4.0, scalarize_batch_f
     q_c = p_mean(qs_c, p=p_objectives if scalarize_batch_first else p_batch)
     return qs_c, q_c
 
+
+def linear_time_schedule(t, total_steps, perf):
+    return 1-t/total_steps
+
+def perf_schedule(t, total_steps, perf):
+    return 1.0-perf
+
 class CMORL:
-    def __init__(self, reward_fn: RewardFnType, q_composer: Callable = default_q_composer, shape: int | None = None):
+    def __init__(self, reward_fn: RewardFnType, q_composer: Callable = default_q_composer, shape: int | None = None, randomization_schedule = linear_time_schedule):
         self.reward_fn = reward_fn
         self.q_composer = q_composer
         self.shape = shape
+        self.randomization_schedule = randomization_schedule
 
     def calculate_space(self, env):
         if self.shape is not None:

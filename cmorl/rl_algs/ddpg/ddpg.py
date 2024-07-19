@@ -3,6 +3,7 @@
 
 # This script needs these libraries to be installed:
 #   tensorflow, numpy
+from collections import deque
 import time
 from typing import Callable
 import numpy as np
@@ -180,11 +181,9 @@ def ddpg(
             {"pi": pi_network.output, "before_clip": pi_network.layers[-2].output},
         )
         pi_and_before_clip.compile()
-        # q_and_before_clip = keras.Model(
-        #     q_network.input, {"q": q_network.output, "before_clip": q_network.layers[-2].output})
         q_and_before_clip = keras.Model(
             q_network.input,
-            {"q": q_network.output, "before_clip": q_network.layers[-2].output, "before_before_clip": q_network.layers[-3].output},
+            {"q": q_network.output, "before_clip": q_network.layers[-2].output},
         )
         q_and_before_clip.compile()
     # Target networks
@@ -250,16 +249,16 @@ def ddpg(
             # error = tf.abs(outputs["before_clip"] - backup)
             # smooth_max_errors = tf.stop_gradient(p_mean(error, p=10.0, axis=0)) +1e-7
             # q_bellman_c = p_mean(estimated_std/(estimated_std + p_mean(error, p = 2.0, axis=0)), p=0.0)
-            q_bellman_c = 1.0 - p_mean(error, p=2.0)
+            q_bellman_c = p_mean(p_mean(1.0 - error, p=hp.q_batch, axis=0, slack=1e-7), p=hp.q_objectives, slack=1e-7)
             # q_bellman_c = p_mean(1e-6*p_mean(error, p=2.0)/(estimated_spread**0.5 + 1e-6), p=1.0)
             # tf.print(p_mean(error, p=2.0, axis=0)/smooth_max_errors)
-            q_direct_c = 1.0 - p_mean(p_mean(outputs["q"] - estimated_values, p=2.0), p=1.0)
+            q_direct_c = p_mean(p_mean(1.0 - tf.abs(outputs["q"] - estimated_values), p=hp.q_batch, axis=0, slack=1e-7), p=hp.q_objectives, slack=1e-7)
             # q_bellman_batch = p_mean( tf.abs(q - backup), p=4.0, axis=0, dtype=tf.float32)
             # q_bellman_c = p_mean(1.0 - 0.01*q_bellman_batch/tf.maximum(0.01, estimated_std), p=0.0)
             # q_bellman_c = p_mean(1.0 - q_bellman_batch, p=-4.0)
             with_reg = p_mean(tf.stack([
                 q_bellman_c,
-                q_direct_c**0.5,
+                q_direct_c**hp.qd_power,
                 keep_in_range
             ]), p=0.0)
 
@@ -326,10 +325,10 @@ def ddpg(
             sum_step_return += ep_ret / ep_len
         return sum_step_return / n
     
-    def get_action(o, schedule = lambda t: 1.0 - t / total_steps):
+    def get_action(o, randomization_amount):
         if t > hp.start_steps:
             # action = randomize_action(o, hp.act_noise * schedule(t), np_random)
-            action = add_noise_to_weights(o, pi_network, env.action_space, hp.act_noise * schedule(t), np_random)
+            action = add_noise_to_weights(o, pi_network, env.action_space, hp.act_noise * randomization_amount, np_random)
         else:
             env.action_space._np_random = np_random
             action = env.action_space.sample()
@@ -393,9 +392,9 @@ def ddpg(
     start_time = time.time()
     o, info = env.reset()
     observations = [o]
-    actions = []
-    rewards = []
-    cmorl_rewards = []
+    actions = deque()
+    rewards = deque()
+    cmorl_rewards = deque()
     total_steps = hp.steps_per_epoch * hp.epochs
 
     # Main loop: collect experience in env and update/log each epoch
@@ -406,7 +405,8 @@ def ddpg(
         use the learned policy (with some noise, via act_noise).
         """
         q_c = wandb.run.summary.get("Q-composed")
-        action = get_action(observations[-1], lambda t: (1.0 - q_c) if q_c else 1.0)
+        action = get_action(observations[-1], randomization_amount=cmorl.randomization_schedule(t, total_steps, q_c if q_c else 0.0))
+        # action = get_action(observations[-1], lambda t: (1.0 - q_c) if q_c else 1.0) # randomize based on performance
         actions.append(action)
 
         # Step the env
