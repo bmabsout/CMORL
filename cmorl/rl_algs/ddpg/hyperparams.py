@@ -1,11 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import reduce
 from pathlib import Path
 import time
 from argparse import Namespace
+import tensorflow as tf
 
 from cmorl.utils.args_utils import Arg_Serializer, Serialized_Argument, namespace_serializer
 
+@dataclass(init=False) # so the type system shows the options
 class HyperParams(Namespace):
     ac_kwargs      : dict[str, object]
     prev_folder    : None | Path
@@ -23,9 +25,13 @@ class HyperParams(Namespace):
     max_ep_len     : int
     train_every    : int
     train_steps    : int
-    p_Q_batch      : float
-    p_Q_objectives : float
-    env_args       : dict[str, object] = {}
+    p_batch        : float
+    q_batch        : float
+    q_objectives   : float
+    p_objectives   : float
+    qd_power       : float
+    env_args       : dict[str, object]
+    # noise_schedule : tf.keras.optimizers.schedules.LearningRateSchedule
 
 
 descriptions: dict[str,  str] = {
@@ -45,8 +51,10 @@ descriptions: dict[str,  str] = {
     "max_ep_len": "Maximum length of an episode",
     "train_every": "Number of steps to wait before training",
     "train_steps": "Number of training steps to take",
-    "p_Q_batch": "The p-value for composing the Q-values across the batch",
-    "p_Q_objectives": "The p-value for composing the Q-values across the objectives"
+    "p_batch": "The p-value for composing the Q-values across the batch",
+    "p_objectives": "The p-value for composing the Q-values across the objectives",
+    "q_batch": "The p-mean value for critic error's batch",
+    "q_objectives": "The p-mean value for composing the different critic's q-value errors"
 }
 
 abbreviations = {
@@ -54,8 +62,11 @@ abbreviations = {
     "seed": "s",
     "epochs": "e",
     "gamma": "g",
-    "p_Q_batch": "p_b",
-    "p_Q_objectives": "p_o"
+    "p_batch": "p_b",
+    "p_objectives": "p_o",
+    "q_batch": "q_b",
+    "q_objectives": "q_o",
+    "qd_power": "q_d"
 }
 
 def default_hypers():
@@ -68,17 +79,20 @@ def default_hypers():
         replay_size     = int(1e6),
         gamma           = 0.9,
         polyak          = 0.995,
-        pi_lr           = 1e-3,
-        q_lr            = 1e-3,
+        pi_lr           = 3e-3,
+        q_lr            = 3e-3,
         batch_size      = 100,
         start_steps     = 1000,
-        act_noise       = 0.1,
-        max_ep_len      = 400,
+        act_noise       = 0.2,
+        max_ep_len      = None,
         train_every     = 50,
         train_steps     = 30,
-        p_Q_batch       = 0.0,
-        p_Q_objectives  = -4.0,
-        env_args        = {},
+        p_batch         = 0.5,
+        p_objectives    = 0.0,
+        q_batch         = 0.5,
+        q_objectives    = 0.0,
+        qd_power        = 0.5,
+        env_args        = {}
     )
 
 def combine(*hps: HyperParams):

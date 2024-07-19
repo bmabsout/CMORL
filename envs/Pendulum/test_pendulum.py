@@ -3,7 +3,6 @@ import Pendulum
 import argparse
 from cmorl.utils import test_utils, reward_utils
 
-
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument(

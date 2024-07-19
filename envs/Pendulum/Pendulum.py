@@ -312,3 +312,6 @@ class PendulumEnv(gym.Env):
 def normed_angular_distance(a, b):
     diff = (b - a + np.pi) % (2 * np.pi) - np.pi
     return np.abs(diff + 2 * np.pi if diff < -np.pi else diff) / np.pi
+
+
+gym.register("Pendulum-custom", PendulumEnv) # type:ignore

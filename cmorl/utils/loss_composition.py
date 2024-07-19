@@ -38,7 +38,7 @@ def tf_pop(tensor, axis):
 
 
 @tf.function
-def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype=tf.float64) -> tf.Tensor:
+def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
     """
     The Generalized mean
     l: a tensor of elements we would like to compute the p_mean with respect to, elements must be > 0.0
@@ -47,22 +47,29 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype
     axis: axis or axese to collapse the pmean with respect to, None would collapse all
     https://www.wolframcloud.com/obj/26a59837-536e-4e9e-8ed1-b1f7e6b58377
     """
+    l = tf.convert_to_tensor(l)
+    dtype = dtype if dtype else l.dtype
     slack = tf.cast(slack, dtype)
-    l = tf.cast(tf.convert_to_tensor(l), dtype) + slack
+    l = tf.cast(l, dtype)
+    slacked = l + slack
     p = tf.cast(p, dtype)
     default_val = tf.cast(default_val, dtype)
     min_val = tf.constant(1e-5, dtype=dtype)
     p = tf.where(tf.abs(p) < min_val, -min_val if p < 0.0 else min_val, p)
     
-    stabilizer = tf.reduce_min(l) if p < 1.0 else tf.reduce_max(l)
-    stabilized_l = l/stabilizer # stabilize the values to prevent overflow or underflow
+    stabilizer = tf.reduce_min(slacked) if p < 1.0 else tf.reduce_max(slacked)
+    stabilized_l = slacked/stabilizer # stabilize the values to prevent overflow or underflow
 
-    p_meaned = tf.cond(tf.reduce_prod(tf.shape(l)) == 0 # condition if an empty array is fed in
-        , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(l), axis)) if axis else default_val
+    p_meaned = tf.cond(tf.reduce_prod(tf.shape(slacked)) == 0 # condition if an empty array is fed in
+        , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(slacked), axis)) if axis else default_val
         , lambda: (tf.reduce_mean(stabilized_l**p, axis=axis))**(1.0/p) - slack)*stabilizer
     
-    clip_t = tf.clip_by_value(p_meaned, 0.0, tf.reduce_max(l)) # prevent negative outputs
+    clip_t = tf.clip_by_value(p_meaned, tf.reduce_min(l), tf.reduce_max(l)) # prevent negative outputs
     return p_meaned + tf.stop_gradient(clip_t - p_meaned)
+
+@tf.function
+def simple_p_mean(l: tf.Tensor, p: float, axis=0) -> tf.Tensor:
+    return tf.reduce_mean(l**p, axis=axis)**(1.0/p)
 
 # @tf.custom_gradient
 # def fixed_grad_p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None, dtype=tf.float64):
@@ -82,9 +89,11 @@ def p_to_min(l, p=0, q=0):
 #     return tf.abs(with_mixer(a1)-with_mixer(a2))/2.0
 
 
-@tf.function
-def laplace_smoothing(weaken_me, weaken_by):
-    return (weaken_me + weaken_by) / (1.0 + weaken_by)
+@tf.custom_gradient
+def soft(weaken_me, weaken_by=1.0):
+    def grad_passthrough(dy):
+        return dy
+    return (weaken_me / (tf.abs(weaken_me) + weaken_by)), grad_passthrough
 
 
 @tf.custom_gradient
@@ -120,22 +129,27 @@ def move_towards_range(x, min, max):
 
     return 1.0 / tf.where(in_range, 1.0, tf.abs(normalized)**0.5), grad
 
+@tf.function
+def then(x, y, slack=0.2, p=0.0):
+    # return tf.minimum(1.0, 1.0 - x + y)
+    return p_mean([x,slack+y*(1-slack)], p=p)
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     with tf.GradientTape() as gt:
-        samples = 100
-        x = tf.Variable(tf.linspace(0.1, 1.0, samples)**5.0)
-        randos = tf.broadcast_to(tf.expand_dims(np.random.rand(50)**5.0, 1), (50, samples))
-        a = tf.concat([tf.cast(tf.expand_dims(x, 0), tf.float64), tf.cast(randos, tf.float64)], 0)
-        y = p_mean(a, -10.0, axis=0)
-        print(x.shape)
-        print(y.shape)
-    #     x = tf.Variable(tf.linspace(-2.0, 2.0, 100))
-    #     y = move_towards_range(x, 0.0, 1.0)
+        # samples = 100
+        # x = tf.Variable(tf.linspace(0.1, 1.0, samples)**5.0)
+        # randos = tf.broadcast_to(tf.expand_dims(np.random.rand(50)**5.0, 1), (50, samples))
+        # a = tf.concat([tf.cast(tf.expand_dims(x, 0), tf.float64), tf.cast(randos, tf.float64)], 0)
+        # y = p_mean(a, -10.0, axis=0)
+        # print(x.shape)
+        # print(y.shape)
+        x = tf.Variable(tf.linspace(-2.0, 2.0, 100))
+        y = move_towards_range(x, 0.0, 1.0)
 
     plt.plot(x, gt.gradient(y,x), label="grad")
     plt.plot(x, y, label="y")
-    plt.plot(x, np.min(a, axis=0), label="min")
-    plt.plot(x, np.max(a, axis=0), label="max")
+    # plt.plot(x, np.min(a, axis=0), label="min")
+    # plt.plot(x, np.max(a, axis=0), label="max")
     plt.legend()
     plt.show()
