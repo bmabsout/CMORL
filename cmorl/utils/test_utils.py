@@ -1,20 +1,22 @@
+from collections import deque
+import glob
 from cmorl.configs import ForcedTimeLimit
 from cmorl.rl_algs.ddpg.ddpg import add_noise_to_weights
 from cmorl.utils import save_utils
 import numpy as np
 
-from cmorl.utils.reward_utils import Transition, discounted_window, estimated_value_fn, values
+from cmorl.utils.reward_utils import CMORL, Transition, discounted_window, estimated_value_fn, values
 
 
-def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmorl=None, max_ep_len=None):
+def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmorl=None, max_ep_len=None, gamma=0.99):
     if force_truncate_at is not None:
         env = ForcedTimeLimit(env, max_episode_steps=force_truncate_at)
     o, _ = env.reset(seed=seed)
     np_random = np.random.default_rng(seed)
-    os = []
-    rs = []
-    cmorl_rs = []
-    actions = []
+    os = deque()
+    rs = deque()
+    cmorl_rs = deque()
+    actions = deque()
     while(True):
         action = actor(o, np_random)
         # print(action)
@@ -40,21 +42,20 @@ def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmor
     qs = np.array(critic(os, actions))
     np.set_printoptions(precision=2)
     print("ep len:", len(os))
-    print("reward sum:", np.sum(rs))
+    rsum = np.sum(rs)
+    print("reward sum:", rsum)
     print("cmorl sum:", np.sum(cmorl_rs, axis=0))
-    print("estimated avg value (gamma 0.999):", estimated_value_fn(cmorl_rs, 0.999, done=d))
-    print("estimated avg value (gamma 0.99):", estimated_value_fn(cmorl_rs, 0.99, done=d))
-    print("check:", np.mean(values(cmorl_rs, 0.99, done=d), axis=0))
-    print("estimated avg value (gamma 0.9):", estimated_value_fn(cmorl_rs, 0.9, done=d))
+    estimated_value = estimated_value_fn(cmorl_rs, gamma, done=d)
+    print(f"estimated avg value (gamma ${gamma}):", estimated_value)
+    print("check:", np.mean(values(cmorl_rs, gamma, done=d), axis=0))
     print("mean q:", np.mean(qs, axis=0))
-    print("first:", qs[0], np.sum(discounted_window(rs, 0.99, done=d,axis=0)))
+    print("first:", qs[0], np.sum(discounted_window(rs, gamma, done=d,axis=0)))
     print("last:", qs[-1])
     print("max:", np.max(qs, axis=0))
     print("min:", np.min(qs, axis=0))
-    print(discounted_window(cmorl_rs, 0.99, window_size=np.inf, done=d)[0])
-    print(qs[0])
-    print("offness:", np.mean(np.abs(qs - values(cmorl_rs, 0.99, done=d)), axis=0))
-    return os, rs, cmorl_rs
+    vals = values(cmorl_rs, gamma, done=d)
+    print("offness:", np.mean(np.abs(qs - vals), axis=0))
+    return os, rs, cmorl_rs, rsum, vals
 
 
 def folder_to_results(env, render, num_tests, folder_path, force_truncate_at=None, cmorl=None, max_ep_len=None, **kwargs):
@@ -72,18 +73,39 @@ def folder_to_results(env, render, num_tests, folder_path, force_truncate_at=Non
     return runs
 
 
-def run_tests(env, cmd_args, folders = [], cmorl=None, max_ep_len=None):
-    print(cmd_args.save_folders)
-    print("################################")
-    print("################################")
-    print("################################")
+def run_tests(env, cmd_args, folders, cmorl: CMORL=None, max_ep_len=None):
+    # a deque so we can effiently append
+    q_cs = deque()
+    qs_cs = deque()
+    rsums_means = deque()
     for folder in folders:
         print("using folder:", folder)
-    print("################################")
-    print("################################")
-    print("################################")
-    runs = [
-        np.mean(folder_to_results(env, folder_path=folder, cmorl=cmorl, max_ep_len=max_ep_len, **vars(cmd_args)))
-        for folder in folders
-    ]
-    return runs
+        _, _, _, rsums, valss = zip(*folder_to_results(env, folder_path=folder, cmorl=cmorl, max_ep_len=max_ep_len, **vars(cmd_args)))
+        qs_c, q_c = cmorl.q_composer(np.concatenate(valss, axis=0))
+        q_cs.append(q_c.numpy())
+        qs_cs.append(qs_c.numpy())
+        rsums_means.append(np.mean(rsums))
+
+    results = {
+        "q_c": (np.mean(q_cs, axis=0), np.std(q_cs, axis=0)),
+        "qs_c": (np.mean(qs_cs, axis=0), np.std(qs_cs, axis=0)),
+        "rsums": (np.mean(rsums_means), np.std(rsums_means))
+    }
+
+    return results
+
+def folder_groups_from_globs(*globs: str):
+    folder_groups = {}
+    for unglobbed in globs:
+        latest_folders = map(save_utils.latest_train_folder, glob.glob(unglobbed))
+        folder_groups[unglobbed] = [ folder for folder in latest_folders if folder is not None]
+    return folder_groups
+
+def run_folder_group_tests(env, cmd_args, folder_groups, cmorl=None, max_ep_len=None):
+    group_results = {}
+    for folder_group_name, folders in folder_groups.items():
+        print("using folder group:", folder_group_name)
+        run_stats = run_tests(env, cmd_args, folders=folders, cmorl=cmorl, max_ep_len=max_ep_len)
+            
+        group_results[folder_group_name] = run_stats
+    return group_results
