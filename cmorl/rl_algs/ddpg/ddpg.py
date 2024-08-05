@@ -229,7 +229,7 @@ def ddpg(
             outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
 
             pi_targ = pi_targ_network(obs2)
-            q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["before_clip"]
+            q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["q"]
             # q_pi_later = q_and_before_clip(tf.concat([obs2, pi_network(obs2)], axis=-1))["before_clip"]
             batch_size = tf.shape(dones)[0]
 
