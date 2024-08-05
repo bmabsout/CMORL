@@ -46,12 +46,14 @@ def find_all_train_paths(path):
 
 
 def latest_train_folder(path):
-    return max(find_all_train_paths(path), key=os.path.getctime)
+    return max(find_all_train_paths(path), key=os.path.getctime, default=None)
 
 
 def concatenate_lists(list_of_lists):
     return [item for sublist in list_of_lists for item in sublist]
 
+def get_env_name_from_folder(folder):
+    return folder.parents[5].name
 
 def on_save(actor: Model, q_network: Model, epoch:int, replay_buffer, replay_save:bool, save_path:str):
     epoch_path = Path(save_path, str(epoch))
