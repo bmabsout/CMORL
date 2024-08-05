@@ -61,13 +61,17 @@ class RescalingFixed(Rescaling):
         super().__init__(scale, offset, **kwargs)
 
 
+@tf.function
+def clip_with_grads(val, min, max):
+    clip_t = tf.clip_by_value(val, min, max)
+    return val + tf.stop_gradient(clip_t - val)
 class ClipLayer(Activation):
     def __init__(self, min, max, **kwargs):
         self.min = min
         self.max = max
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: tf.clip_by_value(x, min, max), **kwargs)
+        super().__init__(activation=lambda x: clip_with_grads(x, min, max), **kwargs)
 
     def get_config(self):
         config = super().get_config()
@@ -101,6 +105,7 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
     model = keras.Model(inputs, clipped)
     model.compile()
     return model
+
 
 def critic(
     obs_space: spaces.Box,

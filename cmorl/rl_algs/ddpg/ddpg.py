@@ -129,11 +129,7 @@ def ddpg(
         cmorl (CMORL): A class that defines the reward function and the q-composer.
     """
     # start a new wandb run to track this script
-    tf.debugging.experimental.enable_dump_debug_info(
-        "./tfdbg2_logdir",
-        tensor_debug_mode="FULL_HEALTH",
-        circular_buffer_size=-1
-    )
+
 
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
@@ -230,37 +226,23 @@ def ddpg(
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones, estimated_values):
         with tf.GradientTape() as tape:
-            # q_squeezed = tf.squeeze(q, axis=1)
             outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
-
+            q, before_clip = outputs["q"], outputs["before_clip"]
             pi_targ = pi_targ_network(obs2)
             q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["q"]
-            # q_pi_later = q_and_before_clip(tf.concat([obs2, pi_network(obs2)], axis=-1))["before_clip"]
             batch_size = tf.shape(dones)[0]
 
             dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
-            # estimated_min = p_mean(estimated_values, p=-1.0, axis=0, slack=1e-7)
-            # estimated_mean_value = p_mean(estimated_values, p=1.0, axis=0)
-            # estimated_max = 1.0 - p_mean(1.0 - estimated_values, p=-1.0, axis=0, slack=1e-7)
-            # estimated_spread = estimated_max - estimated_min + 1e-7
-            # estimated_std = tf.expand_dims(tf.math.reduce_std(estimated_values, axis=0), axis=0) + 1e-7
             normalization_factor = (1.0 - hp.gamma)
             backup = tf.stop_gradient(rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_targ)
             # soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
             keep_in_range = p_mean(
-                move_towards_range(outputs["before_clip"], 0.0, 1.0), p=-1.0
+                move_towards_range(before_clip, 0.0, 1.0), p=-1.0
             )
-            error = tf.abs(outputs["q"] - backup)
-            # error = tf.abs(outputs["before_clip"] - backup)
-            # smooth_max_errors = tf.stop_gradient(p_mean(error, p=10.0, axis=0)) +1e-7
-            # q_bellman_c = p_mean(estimated_std/(estimated_std + p_mean(error, p = 2.0, axis=0)), p=0.0)
-            q_bellman_c = p_mean(p_mean(1.0 - error, p=hp.q_batch, axis=0, slack=1e-7), p=hp.q_objectives, slack=1e-7)
-            # q_bellman_c = p_mean(1e-6*p_mean(error, p=2.0)/(estimated_spread**0.5 + 1e-6), p=1.0)
-            # tf.print(p_mean(error, p=2.0, axis=0)/smooth_max_errors)
-            q_direct_c = p_mean(p_mean(1.0 - tf.abs(outputs["q"] - estimated_values), p=hp.q_batch, axis=0, slack=1e-7), p=hp.q_objectives, slack=1e-7)
-            # q_bellman_batch = p_mean( tf.abs(q - backup), p=4.0, axis=0, dtype=tf.float32)
-            # q_bellman_c = p_mean(1.0 - 0.01*q_bellman_batch/tf.maximum(0.01, estimated_std), p=0.0)
-            # q_bellman_c = p_mean(1.0 - q_bellman_batch, p=-4.0)
+            td0_error = tf.abs(q - backup)
+            estimated_tdinf_error = tf.abs(q - estimated_values)
+            q_bellman_c = p_mean(p_mean(1.0 - td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
+            q_direct_c = p_mean(p_mean(1.0 - estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
             with_reg = p_mean(tf.stack([
                 q_bellman_c,
                 q_direct_c**hp.qd_power,

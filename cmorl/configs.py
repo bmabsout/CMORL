@@ -44,7 +44,7 @@ env_configs: dict[str, Config] = {
     ),
     "Hopper-v4": Config(
         reward_fns.mujoco_CMORL(speed_multiplier=0.5, num_actions=3),
-        HyperParams(gamma=0.99, epochs=60, p_batch=0.5, polyak=0.99, replay_size=int(1e5)),
+        HyperParams(gamma=0.99, epochs=60, polyak=0.99, replay_size=int(1e5)),
     ),
     "HalfCheetah-v4": Config(
         reward_fns.mujoco_CMORL(speed_multiplier=0.15, num_actions=6),
@@ -60,7 +60,7 @@ env_configs: dict[str, Config] = {
         CMORL(reward_fns.lunar_lander_rw, reward_fns.lander_composer),
         HyperParams(
             ac_kwargs={
-                "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high, # type: ignore
+                "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high, 
                 "critic_hidden_sizes": (400, 300),
                 "actor_hidden_sizes": (32, 32),
             },
@@ -74,7 +74,7 @@ env_configs: dict[str, Config] = {
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),
     "Bittle-custom": Config(
-        CMORL(reward_fns.bittle_rw, randomization_schedule=perf_schedule),
+        CMORL(reward_fns.bittle_rw),
         HyperParams(
             gamma=0.99,
             act_noise=0.1,
