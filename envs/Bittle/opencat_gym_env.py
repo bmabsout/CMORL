@@ -18,15 +18,6 @@ class OpenCatGymEnv(gym.Env):
         self.observe_joints = observe_joints
         self.step_counter = 0
         
-        # Constants
-        self.BOUND_ANG = 110  # Joint maximum angle (degrees)
-        self.MAX_ANGLE_CHANGE = 11  # Maximum angle (degrees) delta per step
-        self.ANG_FACTOR = 0.1  # Improve angular velocity resolution before clip
-        self.LENGTH_RECENT_ANGLES = 3  # Buffer to read recent joint angles
-        
-        # Observation space size
-        self.SIZE_OBSERVATION = 3 + 3 + 1 + 3  # Linear vel, Angular vel, Time, Gravity Direction
-        self.TOTAL_OBSERVATION = self.SIZE_OBSERVATION + (self.LENGTH_RECENT_ANGLES * self.NUM_JOINTS if observe_joints else 0)
 
         # Set up PyBullet
         p.connect(p.GUI if render_mode == "human" else p.DIRECT)
@@ -48,10 +39,20 @@ class OpenCatGymEnv(gym.Env):
             return joint_type in (p.JOINT_PRISMATIC, p.JOINT_REVOLUTE)
 
         self.joint_ids = list(filter(is_relevant_joint, range(p.getNumJoints(self.robot_id))))
-        self.NUM_JOINTS = len(self.joint_ids)
         
         for j in self.joint_ids:
             p.changeDynamics(self.robot_id, j, maxJointVelocity=np.pi*10)
+
+        # Constants
+        self.BOUND_ANG = 110  # Joint maximum angle (degrees)
+        self.MAX_ANGLE_CHANGE = 11  # Maximum angle (degrees) delta per step
+        self.ANG_FACTOR = 0.1  # Improve angular velocity resolution before clip
+        self.LENGTH_RECENT_ANGLES = 3  # Buffer to read recent joint angles
+        
+        # Observation space size
+        self.SIZE_OBSERVATION = 3 + 3 + 1 + 3  # Linear vel, Angular vel, Time, Gravity Direction
+        self.NUM_JOINTS = len(self.joint_ids)
+        self.TOTAL_OBSERVATION = self.SIZE_OBSERVATION + (self.LENGTH_RECENT_ANGLES * self.NUM_JOINTS if observe_joints else 0)
 
         # Define action and observation spaces
         action_high = np.ones(self.NUM_JOINTS)
@@ -83,20 +84,20 @@ class OpenCatGymEnv(gym.Env):
         return obs.astype(np.float32)
 
     def get_joint_angs(self):
-        return np.rad2deg(np.asarray(p.getJointStates(self.robot_id, self.joint_ids), dtype=object)[:,0])
+        return np.rad2deg([ joint_state[0] for joint_state in p.getJointStates(self.robot_id, self.joint_ids) ])
     
     def control_motors(self, action):
         joint_angs = self.get_joint_angs()
         # Change per step including agent action
-        with_action = joint_angs + np.clip(action*self.bound_ang - joint_angs, -1.0, 1.0) * self.MAX_ANGLE_CHANGE
+        with_action = joint_angs + np.clip(action*self.BOUND_ANG - joint_angs, -1.0, 1.0) * self.MAX_ANGLE_CHANGE
         # due to the low resolution of the real servos, we need to round the angles
         low_resolution_angs = np.round(with_action)
-        new_joint_angs = np.clip(low_resolution_angs, -self.bound_ang, self.bound_ang)
+        new_joint_angs = np.clip(low_resolution_angs, -self.BOUND_ANG, self.BOUND_ANG)
         p.setJointMotorControlArray(
             self.robot_id, 
             self.joint_ids, 
             p.POSITION_CONTROL, 
-            new_joint_angs, 
+            np.deg2rad(new_joint_angs), 
             forces=np.ones(self.NUM_JOINTS)*0.2
         )
         return new_joint_angs / self.BOUND_ANG
@@ -136,7 +137,7 @@ class OpenCatGymEnv(gym.Env):
         terminated = self.is_fallen()
         truncated = False
         
-        info = {"forward": movement_forward, "change_direction": change_direction_scalar, "body_stability": body_stability_scalar}
+        info = {"forward": movement_forward, "change_direction": change_direction, "body_stability": body_stability}
         
         return observation, reward, terminated, truncated, info
 
@@ -146,9 +147,9 @@ class OpenCatGymEnv(gym.Env):
         p.resetBasePositionAndOrientation(self.robot_id, [0, 0, 0.08], p.getQuaternionFromEuler([0, 0, 0]))
         p.resetBaseVelocity(self.robot_id, [0, 0, 0], [0, 0, 0])
         # Set initial joint positions
-        initial_angles = np.deg2rad([50, 0, 50, 0, 50, 0, 50, 0])
+        initial_angles = np.array([50, 0, 50, 0, 50, 0, 50, 0])
         for i, joint_id in enumerate(self.joint_ids):
-            p.resetJointState(self.robot_id, joint_id, initial_angles[i])
+            p.resetJointState(self.robot_id, joint_id, np.deg2rad(initial_angles[i]))
         
         # Initialize recent angles history
         self.recent_angles = np.tile(initial_angles / self.BOUND_ANG, (self.LENGTH_RECENT_ANGLES, 1))
@@ -156,7 +157,7 @@ class OpenCatGymEnv(gym.Env):
         observation = self._get_obs()
         info = {}
         
-        return observation.astype(np.float32), info
+        return observation, info
 
     def render(self, mode='human'):
         pass

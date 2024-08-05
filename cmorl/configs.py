@@ -78,10 +78,10 @@ env_configs: dict[str, Config] = {
         HyperParams(
             gamma=0.99,
             act_noise=0.1,
-            ac_kwargs={"critic_hidden_sizes": (512, 512), "actor_hidden_sizes": (64, 64)},
+            ac_kwargs={"critic_hidden_sizes": (512, 512), "actor_hidden_sizes": (256, 256)},
             max_ep_len=400,
-            p_batch=1.0,
-            qd_power=0.5
+            env_args={"observe_joints": True},
+            # qd_power=0.5
         ),
     ),
 }

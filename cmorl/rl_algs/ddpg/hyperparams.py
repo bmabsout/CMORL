@@ -9,28 +9,28 @@ from cmorl.utils.args_utils import Arg_Serializer, Serialized_Argument, namespac
 
 @dataclass(init=False) # so the type system shows the options
 class HyperParams(Namespace):
-    ac_kwargs      : dict[str, object]
-    prev_folder    : None | Path
-    seed           : int
-    steps_per_epoch: int
-    epochs         : int
-    replay_size    : int
-    gamma          : float
-    polyak         : float
-    pi_lr          : float
-    q_lr           : float
-    batch_size     : int
-    start_steps    : int
-    act_noise      : float
-    max_ep_len     : int
-    train_every    : int
-    train_steps    : int
-    p_batch        : float
-    q_batch        : float
-    q_objectives   : float
-    p_objectives   : float
-    qd_power       : float
-    env_args       : dict[str, object]
+    ac_kwargs        : dict[str, object]
+    prev_folder      : None | Path
+    seed             : int
+    steps_per_epoch  : int
+    epochs           : int
+    replay_size      : int
+    gamma            : float
+    polyak           : float
+    pi_lr            : float
+    q_lr             : float
+    batch_size       : int
+    start_steps      : int
+    act_noise        : float
+    max_ep_len       : int
+    train_every      : int
+    train_steps      : int
+    p_batch          : float
+    q_batch          : float
+    q_objectives     : float
+    p_objectives     : float
+    qd_power         : float
+    env_args         : dict[str, object]
     # noise_schedule : tf.keras.optimizers.schedules.LearningRateSchedule
 
 
@@ -88,7 +88,7 @@ def default_hypers():
         train_every     = 50,
         train_steps     = 30,
         p_batch         = 0.5,
-        p_objectives    = 0.0,
+        p_objectives    = -4.0,
         q_batch         = 0.5,
         q_objectives    = 0.0,
         qd_power        = 0.5,

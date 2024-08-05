@@ -129,10 +129,15 @@ def ddpg(
         cmorl (CMORL): A class that defines the reward function and the q-composer.
     """
     # start a new wandb run to track this script
+    tf.debugging.experimental.enable_dump_debug_info(
+        "./tfdbg2_logdir",
+        tensor_debug_mode="FULL_HEALTH",
+        circular_buffer_size=-1
+    )
 
     logger = TensorflowLogger(**logger_kwargs)
     # logger.save_config({"hyperparams": hp.__dict__, "extra_hyperparams": extra_hyperparameters})
-    tf.device("GPU")
+    # tf.device("GPU")
     tf.random.set_seed(hp.seed)
     np_random, _ = seeding.np_random(hp.seed)
 
