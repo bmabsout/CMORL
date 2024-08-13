@@ -38,6 +38,11 @@ def tf_pop(tensor, axis):
 
 
 @tf.function
+def clip_preserve_grads(val, min, max):
+    clip_t = tf.clip_by_value(val, min, max)
+    return val + tf.stop_gradient(clip_t - val)
+
+@tf.function
 def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
     """
     The Generalized mean
@@ -64,8 +69,7 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtyp
         , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(slacked), axis)) if axis else default_val
         , lambda: (tf.reduce_mean(stabilized_l**p, axis=axis))**(1.0/p) - slack)*stabilizer
     
-    clip_t = tf.clip_by_value(p_meaned, tf.reduce_min(l), tf.reduce_max(l)) # prevent negative outputs
-    return p_meaned + tf.stop_gradient(clip_t - p_meaned)
+    return clip_preserve_grads(p_meaned, tf.reduce_min(l), tf.reduce_max(l))
 
 @tf.function
 def simple_p_mean(l: tf.Tensor, p: float, axis=0) -> tf.Tensor:

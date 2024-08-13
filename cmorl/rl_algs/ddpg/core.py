@@ -4,7 +4,9 @@ from keras.layers import Dense, Input, Rescaling, Activation, Lambda, Dropout # 
 from keras.constraints import MaxNorm # type: ignore
 from gymnasium import spaces
 import keras
-import tensorflow as tf # type: ignore
+import tensorflow as tf
+
+from cmorl.utils.loss_composition import clip_preserve_grads # type: ignore
 
 
 
@@ -61,17 +63,13 @@ class RescalingFixed(Rescaling):
         super().__init__(scale, offset, **kwargs)
 
 
-@tf.function
-def clip_with_grads(val, min, max):
-    clip_t = tf.clip_by_value(val, min, max)
-    return val + tf.stop_gradient(clip_t - val)
 class ClipLayer(Activation):
     def __init__(self, min, max, **kwargs):
         self.min = min
         self.max = max
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: clip_with_grads(x, min, max), **kwargs)
+        super().__init__(activation=lambda x: clip_preserve_grads(x, min, max), **kwargs)
 
     def get_config(self):
         config = super().get_config()

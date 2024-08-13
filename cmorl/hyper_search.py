@@ -9,7 +9,8 @@ def random_args_generator(n = 10):
             "-p_o", str(np_random.normal(0.0, 5)),
             "-q_b", str(np_random.normal(0.0, 5)),
             "-q_o", str(np_random.normal(0.0, 5)),
-            "--qd_power", str(np_random.uniform(0.0, 2.0)),
+            "-q_d", str(np_random.uniform(0.0, 2.0)),
+            "--act_noise", str(np_random.uniform(0.01, 0.2)),
         ]
 
 

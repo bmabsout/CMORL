@@ -71,27 +71,30 @@ abbreviations = {
 
 def default_hypers():
     return HyperParams(
-        ac_kwargs       = {},
+        ac_kwargs       = {
+            "critic_hidden_sizes": (400, 300),
+            "actor_hidden_sizes": (32, 32),
+        },
         prev_folder     = None,
         seed            = int(time.time() * 1e5) % int(1e6),
         steps_per_epoch = 5000,
         epochs          = 100,
-        replay_size     = int(1e6),
-        gamma           = 0.9,
-        polyak          = 0.995,
+        replay_size     = int(1e5),
+        gamma           = 0.99,
+        polyak          = 0.99,
         pi_lr           = 3e-3,
         q_lr            = 3e-3,
         batch_size      = 100,
         start_steps     = 1000,
-        act_noise       = 0.2,
+        act_noise       = 0.1,
         max_ep_len      = None,
         train_every     = 50,
-        train_steps     = 30,
-        p_batch         = 0.5,
+        train_steps     = 50,
+        p_batch         = 1.0,
         p_objectives    = -4.0,
-        q_batch         = 0.5,
-        q_objectives    = 0.0,
-        qd_power        = 0.5,
+        q_batch         = 1.0,
+        q_objectives    = 1.0,
+        qd_power        = 1.0,
         env_args        = {}
     )
 

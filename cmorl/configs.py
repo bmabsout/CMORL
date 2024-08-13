@@ -40,11 +40,11 @@ env_configs: dict[str, Config] = {
     ),
     "Ant-v4": Config(
         reward_fns.mujoco_CMORL(num_actions=8),
-        HyperParams(pi_lr=1e-3, q_lr=1e-3, env_args={"use_contact_forces": True}, epochs=100, ac_kwargs={"critic_hidden_sizes": (512, 512), "actor_hidden_sizes": (64, 64)}),
+        HyperParams(env_args={"use_contact_forces": True}, epochs=100),
     ),
     "Hopper-v4": Config(
         reward_fns.mujoco_CMORL(speed_multiplier=0.5, num_actions=3),
-        HyperParams(gamma=0.99, epochs=60, polyak=0.99, replay_size=int(1e5)),
+        HyperParams(epochs=60, act_noise=0.1),
     ),
     "HalfCheetah-v4": Config(
         reward_fns.mujoco_CMORL(speed_multiplier=0.15, num_actions=6),
@@ -60,14 +60,10 @@ env_configs: dict[str, Config] = {
         CMORL(reward_fns.lunar_lander_rw, reward_fns.lander_composer),
         HyperParams(
             ac_kwargs={
-                "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high, 
-                "critic_hidden_sizes": (400, 300),
-                "actor_hidden_sizes": (32, 32),
+                "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high,
             },
-            gamma=0.99,
             epochs=50,
-            polyak=0.99,
-            replay_size=int(1e5),
+            q_d=1.0,
             # p_objectives=0.0,
             # p_batch=1.0,
         ),
@@ -76,9 +72,6 @@ env_configs: dict[str, Config] = {
     "Bittle-custom": Config(
         CMORL(reward_fns.bittle_rw),
         HyperParams(
-            gamma=0.99,
-            act_noise=0.1,
-            ac_kwargs={"critic_hidden_sizes": (512, 512), "actor_hidden_sizes": (256, 256)},
             max_ep_len=400,
             env_args={"observe_joints": True},
             # qd_power=0.5
