@@ -2,11 +2,12 @@ from functools import partial
 from typing import Callable
 
 import gymnasium
-from gymnasium.wrappers import TimeLimit
+from gymnasium.wrappers.time_limit import TimeLimit
 
 from cmorl.rl_algs.ddpg.hyperparams import HyperParams, combine, default_hypers
 from cmorl.utils.reward_utils import CMORL, perf_schedule
 from cmorl import reward_fns
+from envs import Boids
 
 class Config:
     def __init__(self, cmorl: CMORL | None = None, hypers: HyperParams = HyperParams(), wrapper = gymnasium.Wrapper):
@@ -83,6 +84,12 @@ env_configs: dict[str, Config] = {
             p_batch=1.0,
             qd_power=0.5
         ),
+    ),
+    "Boids-v0": Config(
+        CMORL(Boids.multi_dim_reward, randomization_schedule=perf_schedule),
+        HyperParams(
+            max_ep_len=400,
+        )
     ),
 }
 
