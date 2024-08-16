@@ -1,3 +1,4 @@
+from functools import reduce
 import tensorflow as tf # type: ignore
 import numpy as np
 
@@ -92,7 +93,6 @@ def p_to_min(l, p=0, q=0):
 # def mixer_diff_dfl(a1,a2):
 #     return tf.abs(with_mixer(a1)-with_mixer(a2))/2.0
 
-
 @tf.custom_gradient
 def soft(weaken_me, weaken_by=1.0):
     def grad_passthrough(dy):
@@ -134,9 +134,17 @@ def move_towards_range(x, min, max):
     return 1.0 / tf.where(in_range, 1.0, tf.abs(normalized)**0.5), grad
 
 @tf.function
-def then(x, y, slack=0.2, p=0.0):
-    # return tf.minimum(1.0, 1.0 - x + y)
-    return p_mean([x,slack+y*(1-slack)], p=p)
+def then(x, y, slack=0.1, p=-1.0):
+    slack = tf.cast(slack, x.dtype)
+    min_p_mean = p_mean([0, slack], p=p)
+    return (p_mean([x,slack+y*(1-slack)], p=p)-min_p_mean)/(1.0 - min_p_mean)
+
+def curriculum(l, slack=0.1, p=-1.0):
+    return reduce(lambda x, y: then(y, x, slack=slack, p=p), reversed(l))
+
+@tf.function
+def weaken(x, weaken_by=5.0):
+    return 1.0 - (1.0-x)**tf.cast(weaken_by, x.dtype)
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

@@ -2,7 +2,7 @@ from functools import partial
 import numpy as np
 import tensorflow as tf
 
-from cmorl.utils.loss_composition import p_mean, then
+from cmorl.utils.loss_composition import curriculum, p_mean, then, weaken
 from cmorl.utils.reward_utils import  CMORL, Transition
 from gymnasium.envs.box2d.lunar_lander import LunarLander
 from gymnasium.envs.mujoco.reacher import ReacherEnv
@@ -34,9 +34,10 @@ def mujoco_CMORL(speed_multiplier=1.0, num_actions=3):
     def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
         forward = p_mean(qs_c[0:-num_actions], p=p_objectives)
-        action = 1-(1-p_mean(qs_c[-num_actions:], p=p_objectives))**5.0
-        q_c = p_mean((forward, action), p=p_objectives)
-        return qs_c, (1.0 - (1-q_c)**2.0)
+        action = p_mean(qs_c[-num_actions:], p=p_objectives)
+        q_c = then(forward, action, slack=0.5) 
+        # q_c = then(forward, action)
+        return tf.stack([forward, action]), (1.0 - (1-q_c)**2.0)
     return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=speed_multiplier), mujoco_composer)
 
 def composed_reward_fn(transition, env):
@@ -72,6 +73,7 @@ def multi_dim_pendulum(transition: Transition, env, setpoint) -> np.ndarray:
     rw_vec = np.array([angle_rw, actuation_rw], dtype=np.float32)
     return rw_vec
 
+
 def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
     nearness = 1.0 - np.clip(
         np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
@@ -84,15 +86,28 @@ def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
     legs = transition.next_state[6:8]*minize_speed_near_ground
     fuel_costs = 1.0 - np.abs(transition.action/env.action_space.high) # type: ignore
     # return np.concatenate([[nearness**4.0, very_nearness**2.0], fuel_costs, legs])
-    return np.concatenate([[nearness**4.0], fuel_costs, legs])
+    return np.concatenate([[nearness, very_nearness], fuel_costs, legs])
     # return np.concatenate([[nearness**4.0]])
     # return legs
+
 
 @tf.function
 def lander_composer(q_values, p_batch=0, p_objectives=-4.0):
     qs_c = p_mean(q_values, p=p_batch, axis=0)
     nearness=qs_c[0]
-    legs_touch = p_mean(qs_c[3:5], p=2.0)
-    fuel_cost = tf.clip_by_value(p_mean(qs_c[1:3], p=1.0), 0.0, 1.0)
-    q_c = p_mean([nearness, legs_touch, fuel_cost], p=0.0)
-    return tf.concat([qs_c, [nearness, legs_touch]],axis=0), q_c #(1.0 - (1.0 - q_c)**2.0)
+    very_nearness = qs_c[1]
+    legs_touch = p_mean(qs_c[4:6], p=2.0)
+    fuel_cost = p_mean(qs_c[2:4], p=1.0)
+    q_c = curriculum((nearness, very_nearness, legs_touch, fuel_cost), p=p_objectives)
+    # q_c = then(land, fuel_cost)
+    return tf.concat([qs_c, [nearness, very_nearness, legs_touch]],axis=0), q_c #(1.0 - (1.0 - q_c)**2.0)
+
+@tf.function
+def lander_composer2(q_values, p_batch=0, p_objectives=-4.0):
+    qs_c = p_mean(q_values, p=p_batch, axis=0)
+    nearness=qs_c[0]
+    very_nearness = qs_c[1]
+    legs_touch = p_mean(qs_c[4:6], p=2.0)
+    fuel_cost = p_mean(qs_c[2:4], p=1.0)
+    q_c = p_mean([nearness, very_nearness, legs_touch, fuel_cost], p=p_objectives)
+    return tf.concat([qs_c, [nearness, very_nearness, legs_touch]],axis=0), q_c

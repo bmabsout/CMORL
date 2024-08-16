@@ -51,7 +51,13 @@ env_configs: dict[str, Config] = {
         HyperParams(epochs=200, act_noise=0.05),
     ),
     "Pendulum-v1": Config(
-        CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0))
+        CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
+        HyperParams(
+            ac_kwargs = {
+                "critic_hidden_sizes": (128, 128),
+                "actor_hidden_sizes": (32, 32),
+            },
+        )
     ),
     "Pendulum-custom": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0))
@@ -62,10 +68,8 @@ env_configs: dict[str, Config] = {
             ac_kwargs={
                 "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high,
             },
-            epochs=50,
-            q_d=1.0,
-            # p_objectives=0.0,
-            # p_batch=1.0,
+            epochs=30,
+            p_objectives=-1.0,
         ),
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),
