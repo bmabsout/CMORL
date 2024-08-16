@@ -1,7 +1,4 @@
-{ buildPythonPackage
-, python3Packages
-, callPackage
-}:
+{ python }: with python.pkgs;
 
 buildPythonPackage rec {
   pname = "cmorl";
@@ -9,7 +6,7 @@ buildPythonPackage rec {
   src = ../.;
   doCheck = false;
 
-  propagatedBuildInputs = with python3Packages; [
+  propagatedBuildInputs = [
     numpy
     pygame
     pybullet
