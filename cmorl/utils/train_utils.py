@@ -14,7 +14,7 @@ def create_train_folder_and_params(env_name, cmd_args, serializer: Arg_Serialize
         "env_name": env_name,
         "experiment_name": f"{cmd_args.experiment_name}({semantic_name})",
         "hp": cmd_args,
-        "on_save": partial(save_utils.on_save, replay_save=cmd_args.replay_save, save_path=save_path),
+        "on_save": partial(save_utils.on_save, save_path=save_path),
         "logger_kwargs": {"output_dir": save_path},
     }
     if cmd_args.prev_folder:

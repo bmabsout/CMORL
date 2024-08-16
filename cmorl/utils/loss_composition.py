@@ -1,3 +1,4 @@
+from functools import reduce
 import tensorflow as tf # type: ignore
 import numpy as np
 
@@ -38,6 +39,11 @@ def tf_pop(tensor, axis):
 
 
 @tf.function
+def clip_preserve_grads(val, min, max):
+    clip_t = tf.clip_by_value(val, min, max)
+    return val + tf.stop_gradient(clip_t - val)
+
+@tf.function
 def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
     """
     The Generalized mean
@@ -64,8 +70,7 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtyp
         , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(slacked), axis)) if axis else default_val
         , lambda: (tf.reduce_mean(stabilized_l**p, axis=axis))**(1.0/p) - slack)*stabilizer
     
-    clip_t = tf.clip_by_value(p_meaned, tf.reduce_min(l), tf.reduce_max(l)) # prevent negative outputs
-    return p_meaned + tf.stop_gradient(clip_t - p_meaned)
+    return clip_preserve_grads(p_meaned, tf.reduce_min(l), tf.reduce_max(l))
 
 @tf.function
 def simple_p_mean(l: tf.Tensor, p: float, axis=0) -> tf.Tensor:
@@ -87,7 +92,6 @@ def p_to_min(l, p=0, q=0):
 
 # def mixer_diff_dfl(a1,a2):
 #     return tf.abs(with_mixer(a1)-with_mixer(a2))/2.0
-
 
 @tf.custom_gradient
 def soft(weaken_me, weaken_by=1.0):
@@ -130,9 +134,17 @@ def move_towards_range(x, min, max):
     return 1.0 / tf.where(in_range, 1.0, tf.abs(normalized)**0.5), grad
 
 @tf.function
-def then(x, y, slack=0.2, p=0.0):
-    # return tf.minimum(1.0, 1.0 - x + y)
-    return p_mean([x,slack+y*(1-slack)], p=p)
+def then(x, y, slack=0.1, p=-1.0):
+    slack = tf.cast(slack, x.dtype)
+    min_p_mean = p_mean([0, slack], p=p)
+    return (p_mean([x,slack+y*(1-slack)], p=p)-min_p_mean)/(1.0 - min_p_mean)
+
+def curriculum(l, slack=0.1, p=-1.0):
+    return reduce(lambda x, y: then(y, x, slack=slack, p=p), reversed(l))
+
+@tf.function
+def weaken(x, weaken_by=5.0):
+    return 1.0 - (1.0-x)**tf.cast(weaken_by, x.dtype)
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

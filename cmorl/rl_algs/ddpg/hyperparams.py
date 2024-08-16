@@ -9,28 +9,28 @@ from cmorl.utils.args_utils import Arg_Serializer, Serialized_Argument, namespac
 
 @dataclass(init=False) # so the type system shows the options
 class HyperParams(Namespace):
-    ac_kwargs      : dict[str, object]
-    prev_folder    : None | Path
-    seed           : int
-    steps_per_epoch: int
-    epochs         : int
-    replay_size    : int
-    gamma          : float
-    polyak         : float
-    pi_lr          : float
-    q_lr           : float
-    batch_size     : int
-    start_steps    : int
-    act_noise      : float
-    max_ep_len     : int
-    train_every    : int
-    train_steps    : int
-    p_batch        : float
-    q_batch        : float
-    q_objectives   : float
-    p_objectives   : float
-    qd_power       : float
-    env_args       : dict[str, object]
+    ac_kwargs        : dict[str, object]
+    prev_folder      : None | Path
+    seed             : int
+    steps_per_epoch  : int
+    epochs           : int
+    replay_size      : int
+    gamma            : float
+    polyak           : float
+    pi_lr            : float
+    q_lr             : float
+    batch_size       : int
+    start_steps      : int
+    act_noise        : float
+    max_ep_len       : int
+    train_every      : int
+    train_steps      : int
+    p_batch          : float
+    q_batch          : float
+    q_objectives     : float
+    p_objectives     : float
+    qd_power         : float
+    env_args         : dict[str, object]
     # noise_schedule : tf.keras.optimizers.schedules.LearningRateSchedule
 
 
@@ -71,27 +71,30 @@ abbreviations = {
 
 def default_hypers():
     return HyperParams(
-        ac_kwargs       = {},
+        ac_kwargs       = {
+            "critic_hidden_sizes": (400, 300),
+            "actor_hidden_sizes": (32, 32),
+        },
         prev_folder     = None,
         seed            = int(time.time() * 1e5) % int(1e6),
         steps_per_epoch = 5000,
         epochs          = 100,
-        replay_size     = int(1e6),
-        gamma           = 0.9,
-        polyak          = 0.995,
+        replay_size     = int(1e5),
+        gamma           = 0.99,
+        polyak          = 0.99,
         pi_lr           = 3e-3,
         q_lr            = 3e-3,
         batch_size      = 100,
         start_steps     = 1000,
-        act_noise       = 0.2,
+        act_noise       = 0.1,
         max_ep_len      = None,
         train_every     = 50,
-        train_steps     = 30,
-        p_batch         = 0.5,
-        p_objectives    = 0.0,
-        q_batch         = 0.5,
-        q_objectives    = 0.0,
-        qd_power        = 0.5,
+        train_steps     = 50,
+        p_batch         = 1.0,
+        p_objectives    = -4.0,
+        q_batch         = 1.0,
+        q_objectives    = 1.0,
+        qd_power        = 1.0,
         env_args        = {}
     )
 
@@ -103,12 +106,6 @@ def combine(*hps: HyperParams):
 def rl_alg_serializer(experiment_name=None):
     return Arg_Serializer(
         Serialized_Argument(
-            name="replay_save",
-            abbrev="r",
-            action="store_true",
-            help="whether to save the replay buffer",
-        ),
-        Serialized_Argument(
             name="experiment_name",
             abbrev="n",
             type=str,
@@ -116,7 +113,7 @@ def rl_alg_serializer(experiment_name=None):
             default=experiment_name,
             help="name of the experiment"
         ),
-        ignored={"replay_save", "experiment_name"}, # figure out a way to handle experiment_name, as it shouldn't be included int he x: part
+        ignored={"experiment_name"}, # figure out a way to handle experiment_name, as it shouldn't be included int he x: part
     )
 
 

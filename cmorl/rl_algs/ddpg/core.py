@@ -4,7 +4,9 @@ from keras.layers import Dense, Input, Rescaling, Activation, Lambda, Dropout # 
 from keras.constraints import MaxNorm # type: ignore
 from gymnasium import spaces
 import keras
-import tensorflow as tf # type: ignore
+import tensorflow as tf
+
+from cmorl.utils.loss_composition import clip_preserve_grads # type: ignore
 
 
 
@@ -67,7 +69,7 @@ class ClipLayer(Activation):
         self.max = max
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: tf.clip_by_value(x, min, max), **kwargs)
+        super().__init__(activation=lambda x: clip_preserve_grads(x, min, max), **kwargs)
 
     def get_config(self):
         config = super().get_config()
@@ -101,6 +103,7 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
     model = keras.Model(inputs, clipped)
     model.compile()
     return model
+
 
 def critic(
     obs_space: spaces.Box,
