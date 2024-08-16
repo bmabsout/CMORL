@@ -55,14 +55,11 @@ def concatenate_lists(list_of_lists):
 def get_env_name_from_folder(folder):
     return folder.parents[5].name
 
-def on_save(actor: Model, q_network: Model, epoch:int, replay_buffer, replay_save:bool, save_path:str):
+def on_save(actor: Model, q_network: Model, epoch:int, save_path:str):
     epoch_path = Path(save_path, str(epoch))
     os.makedirs(epoch_path, exist_ok=True)
     actor.save(epoch_path / "actor.keras")
     q_network.save(epoch_path / "critic.keras")
-    if replay_save:
-        with open( Path(save_path, "replay.p"), "wb" ) as replay_file:
-            pickle.dump( replay_buffer, replay_file)
 
 def load_critic(folder):
     return models.load_model(Path(folder, "critic.keras"))

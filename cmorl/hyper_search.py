@@ -17,4 +17,8 @@ def random_args_generator(n = 10):
 if __name__ == "__main__":
     cmd_args, rest_of_args = train.parse_env_name()
     for random_args in random_args_generator():
-        train.parse_args_and_train(cmd_args.env_name, args=["-n", "hypersearch", "--seed", "1"]+random_args)
+        try:
+            train.parse_args_and_train(cmd_args.env_name, args=["-n", "hypersearch", "--seed", "1"]+random_args+rest_of_args)
+        except Exception as e:
+            print(f"Error: {e}")
+            continue

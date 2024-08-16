@@ -33,7 +33,7 @@ class Arg_Serializer:
         self.args=list(args)
         self.ignored=ignored
     
-    def add_serialized_args_to_parser(self, parser):
+    def add_serialized_args_to_parser(self, parser):    
         for ser_arg in self.args:
             parser.add_argument(*(["-" + ser_arg.abbrev] if ser_arg.abbrev else []), "--" + ser_arg.name, default=ser_arg.default, **ser_arg.kwargs)
 
@@ -68,7 +68,9 @@ class Arg_Serializer:
     def get_seed_folder_path(self, experiment_name: str, hypers: dict[str, Any]) -> str:
         return f"trained/{experiment_name}/{self.get_semantic_folder_name(hypers)}/seeds/{hypers['seed']}"
 
-    def parse_arguments(self, args=None, parser=argparse.ArgumentParser(), namespace=None):
+    def parse_arguments(self, args=None, parser=None, namespace=None):
+        if parser is None:
+            parser = argparse.ArgumentParser()
         self.add_serialized_args_to_parser(parser)
         cmd_args = parser.parse_args(args, namespace=namespace)
         return cmd_args

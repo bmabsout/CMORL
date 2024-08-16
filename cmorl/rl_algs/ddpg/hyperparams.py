@@ -106,12 +106,6 @@ def combine(*hps: HyperParams):
 def rl_alg_serializer(experiment_name=None):
     return Arg_Serializer(
         Serialized_Argument(
-            name="replay_save",
-            abbrev="r",
-            action="store_true",
-            help="whether to save the replay buffer",
-        ),
-        Serialized_Argument(
             name="experiment_name",
             abbrev="n",
             type=str,
@@ -119,7 +113,7 @@ def rl_alg_serializer(experiment_name=None):
             default=experiment_name,
             help="name of the experiment"
         ),
-        ignored={"replay_save", "experiment_name"}, # figure out a way to handle experiment_name, as it shouldn't be included int he x: part
+        ignored={"experiment_name"}, # figure out a way to handle experiment_name, as it shouldn't be included int he x: part
     )
 
 

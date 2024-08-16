@@ -449,7 +449,7 @@ def ddpg(
 
             # Save model
             if (epoch % save_freq == 0) or (epoch == hp.epochs - 1):
-                on_save(pi_network, q_network, epoch // save_freq, replay_buffer)
+                on_save(pi_network, q_network, epoch // save_freq)
 
             # Test the performance of the deterministic version of the agent.
             # test_agent()
