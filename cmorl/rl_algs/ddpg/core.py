@@ -6,7 +6,7 @@ from gymnasium import spaces
 import keras
 import tensorflow as tf
 
-from cmorl.utils.loss_composition import clip_preserve_grads # type: ignore
+from cmorl.utils.loss_composition import clip_keep_in_range
 
 
 
@@ -69,7 +69,7 @@ class ClipLayer(Activation):
         self.max = max
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: clip_preserve_grads(x, min, max), **kwargs)
+        super().__init__(activation=lambda x: clip_keep_in_range(x, min, max), **kwargs)
 
     def get_config(self):
         config = super().get_config()

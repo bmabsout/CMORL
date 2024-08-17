@@ -73,6 +73,13 @@ def multi_dim_pendulum(transition: Transition, env, setpoint) -> np.ndarray:
     rw_vec = np.array([angle_rw, actuation_rw], dtype=np.float32)
     return rw_vec
 
+def pendulum_composer(q_values, p_batch=0, p_objectives=-4.0):
+    qs_c = p_mean(q_values, p=p_batch, axis=0)
+    angle = qs_c[0]
+    actuation = qs_c[1]
+    q_c = curriculum([angle, actuation], p=p_objectives, slack=0.5)
+    return qs_c, q_c
+
 
 def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
     nearness = 1.0 - np.clip(

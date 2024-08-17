@@ -23,6 +23,7 @@ from cmorl.utils.loss_composition import (
     p_mean,
     scale_gradient,
     soft,
+    weaken,
 )
 
 def np_const_width(array):
@@ -237,17 +238,16 @@ def ddpg(
             backup = tf.stop_gradient(rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_targ)
             # soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
             keep_in_range = p_mean(
-                move_towards_range(before_clip, 0.0, 1.0), p=-1.0
+                move_towards_range(before_clip, 0.0, 1.0), p=-4.0
             )
             td0_error = tf.abs(q - backup)
             estimated_tdinf_error = tf.abs(q - estimated_values)
             q_bellman_c = p_mean(p_mean(1.0 - td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
             q_direct_c = p_mean(p_mean(1.0 - estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
-            with_reg = p_mean(tf.stack([
-                q_bellman_c,
-                q_direct_c**hp.qd_power,
-                keep_in_range
-            ]), p=0.0)
+
+            full_q_c = p_mean([q_bellman_c, weaken(q_direct_c, hp.qd_power)], p=0.0)
+            
+            with_reg = full_q_c
 
             # tf.print(q_bellman_c)
             # tf.print(with_reg)
@@ -272,16 +272,20 @@ def ddpg(
     def pi_update(obs1, obs2, debug=False):
         with tf.GradientTape() as tape:
             outputs = pi_and_before_clip(obs1)
-            pi = outputs["pi"]
-            before_clip = outputs["before_clip"]
-            before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-1.0)
+            pi, before_clip = outputs["pi"], outputs["before_clip"]
+            before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-4.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
             qs_c, q_c = q_composer(
                 q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives
             )
-            all_c = p_mean([q_c, before_clip_c], p=0.0)
+            # all_c = p_mean([q_c, before_clip_c], p=1.0)
+            all_c = q_c
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
+        # if any(tf.reduce_any(tf.math.is_nan(grad)) for grad in grads):
+        #     tf.print(q_values)
+        #     tf.print(pi)
+        #     breakpoint()
         # if debug:
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
 
@@ -289,7 +293,7 @@ def ddpg(
         pi_optimizer.apply_gradients(grads_and_vars)
         return all_c, qs_c, q_c, before_clip_c
 
-    def randomize_action(o, noise_scale, np_random: np.random.Generator = np.random):
+    def randomize_action(o, noise_scale, np_random: np.random.Generator):
         minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
         noise = noise_scale * np_random.normal(size=act_dim).astype(np.float32)
         a = (minus_1_to_1 + noise) * (
