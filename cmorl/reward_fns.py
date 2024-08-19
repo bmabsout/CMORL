@@ -35,9 +35,10 @@ def mujoco_CMORL(speed_multiplier=1.0, num_actions=3):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
         forward = p_mean(qs_c[0:-num_actions], p=p_objectives)
         action = p_mean(qs_c[-num_actions:], p=p_objectives)
-        q_c = then(forward, action, slack=0.5) 
-        # q_c = then(forward, action)
-        return tf.stack([forward, action]), (1.0 - (1-q_c)**2.0)
+        # q_c = then(forward, action, slack=0.5) 
+        # q_c = forward
+        q_c = then(forward, action)
+        return tf.stack([forward, action]), q_c
     return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=speed_multiplier), mujoco_composer)
 
 def composed_reward_fn(transition, env):

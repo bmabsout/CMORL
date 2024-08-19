@@ -58,6 +58,7 @@ env_configs: dict[str, Config] = {
                 "critic_hidden_sizes": (128, 128),
                 "actor_hidden_sizes": (32, 32),
             },
+            epochs=10,
         )
     ),
     "Pendulum-custom": Config(

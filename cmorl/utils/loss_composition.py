@@ -47,12 +47,12 @@ def clip_preserve_grads(val, min, max):
 def clip_keep_in_range(val, min, max):
     clip_t = tf.clip_by_value(val, min, max)
     def grad(dy):
-        push_to_range = tf.where(val > max, tf.where(dy > 0, dy, 1e-3), tf.where(val < min, tf.where(dy < 0, dy, -1e-3), dy))
+        push_to_range = tf.where(val > max, 1e-3, tf.where(val < min, -1e-3, dy))
         return push_to_range, None, None
     return clip_t, grad
 
 @tf.function
-def p_mean(l: tf.Tensor, p: float, slack=1e-9, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
+def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
     """
     The Generalized mean
     l: a tensor of elements we would like to compute the p_mean with respect to, elements must be > 0.0

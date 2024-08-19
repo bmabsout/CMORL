@@ -62,8 +62,8 @@ def estimated_value_fn(rewards, gamma, done=True, normalize=True, axis=0):
 def default_q_composer(q_values, p_batch=0, p_objectives=-4.0, scalarize_batch_first=True):
     qs_c = p_mean(q_values,
                   p=p_batch if scalarize_batch_first else p_objectives,
-                  axis=0 if scalarize_batch_first else 1)
-    q_c = p_mean(qs_c, p=p_objectives if scalarize_batch_first else p_batch)
+                  axis=0 if scalarize_batch_first else 1, slack=1e-7)
+    q_c = p_mean(qs_c, p=p_objectives if scalarize_batch_first else p_batch, slack=1e-7)
     return qs_c, q_c
 
 

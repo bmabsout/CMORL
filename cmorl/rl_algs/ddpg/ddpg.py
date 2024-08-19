@@ -275,6 +275,8 @@ def ddpg(
             pi, before_clip = outputs["pi"], outputs["before_clip"]
             before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-4.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
+            # if (q_values[0,0] == 0.0739770234):
+            #     breakpoint()
             qs_c, q_c = q_composer(
                 q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives
             )
