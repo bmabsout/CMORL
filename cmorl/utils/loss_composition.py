@@ -142,7 +142,7 @@ def move_towards_range(x, min, max):
     return 1.0 / tf.where(in_range, 1.0, tf.abs(normalized)**0.5), grad
 
 @tf.function
-def then(x, y, slack=0.1, p=-1.0):
+def then(x, y, slack=0.5, p=-1.0):
     slack = tf.cast(slack, x.dtype)
     min_p_mean = p_mean([0, slack], p=p)
     return (p_mean([x,slack+y*(1-slack)], p=p)-min_p_mean)/(1.0 - min_p_mean)

@@ -12,7 +12,7 @@ from cmorl.utils.loss_composition import clip_keep_in_range
 
 def mlp_functional(
     inputs,
-    hidden_sizes=(32,),
+    hidden_sizes=[32],
     activation="relu",
     use_bias=True,
     kernel_constraint=None,
@@ -85,12 +85,12 @@ class ClipLayer(Activation):
 
 
 def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer, seed=42):
-    inputs = Input((obs_space.shape[0],))
+    inputs = Input([obs_space.shape[0]])
     normalized_input = RescalingFixed(1./obs_normalizer)(inputs)
     # unscaled = unscale_by_space(inputs, obs_space)
     linear_output = mlp_functional(
         normalized_input,
-        hidden_sizes + (act_space.shape[0],),
+        hidden_sizes + [act_space.shape[0]],
         use_bias=True,
         output_activation=None,
         kernel_constraint=None,
@@ -114,10 +114,10 @@ def critic(
     seed=42,
 ):
     concated_normalizer = np.concatenate([obs_normalizer, np.ones(act_space.shape[0])])
-    inputs = Input((obs_space.shape[0] + act_space.shape[0],))
+    inputs = Input([obs_space.shape[0] + act_space.shape[0]])
     normalized_input = RescalingFixed(1. / concated_normalizer)(inputs)
     outputs = mlp_functional(
-        normalized_input, hidden_sizes + (rwds_dim,), output_activation=None, kernel_constraint=None, use_dropout=False, seed=seed, activation="relu"
+        normalized_input, hidden_sizes + [rwds_dim], output_activation=None, kernel_constraint=None, use_dropout=False, seed=seed, activation="relu"
     )
 
     # name the layer before sigmoid
@@ -135,8 +135,8 @@ def mlp_actor_critic(
     act_space: spaces.Box,
     rwds_dim: int,
     obs_normalizer=None,
-    actor_hidden_sizes=(32, 32),
-    critic_hidden_sizes=(400, 300),
+    actor_hidden_sizes=[32, 32],
+    critic_hidden_sizes=[400, 300],
     seed=42
 ) -> tuple[Model, Model]:
     if obs_normalizer is None:

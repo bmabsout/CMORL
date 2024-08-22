@@ -11,13 +11,49 @@ from gymnasium.envs.mujoco.mujoco_env import MujocoEnv
 from envs.Bittle.opencat_gym_env import OpenCatGymEnv
 
 def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: MujocoEnv, speed_multiplier=1.0):
-    action_rw = (1.0 - np.abs(transition.action))
+    action = (1.0 - np.abs(transition.action))
     if not hasattr(env, "prev_xpos"):
         env.prev_xpos = np.copy(env.data.xpos) # type: ignore
     x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
     env.prev_xpos = np.copy(env.data.xpos) # type: ignore
-    forward_rw = np.clip(x_velocities[1:, 0]*speed_multiplier, 0.0, 1.0)
-    return np.hstack([forward_rw, action_rw])
+    speed = np.clip(x_velocities[1:, 0]*speed_multiplier, 0.0, 1.0)
+    return np.hstack([speed, action])
+
+
+
+def mujoco_CMORL(num_actions=3, speed_multiplier=1.0):
+    @tf.function
+    def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
+        qs_c = p_mean(q_values, p=p_batch, axis=0)
+        speed = p_mean(qs_c[0:-num_actions], p=p_objectives)
+        action = p_mean(weaken(qs_c[-num_actions:],2), p=1.0)
+        # q_c = then(forward, action, slack=0.5) 
+        # q_c = forward
+        q_c = p_mean([speed, action], p=p_objectives)
+        return tf.stack([speed, action]), q_c
+    return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=speed_multiplier), mujoco_composer)
+
+def halfcheetah_CMORL():
+    num_actions = 6
+    def reward(transition: Transition, env: MujocoEnv):
+        action = (1.0 - np.abs(transition.action))
+        if not hasattr(env, "prev_xpos"):
+            env.prev_xpos = np.copy(env.data.xpos) # type: ignore
+        x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
+        env.prev_xpos = np.copy(env.data.xpos) # type: ignore
+        speed = x_velocities[1:, 0]
+        # slow = np.clip(speed, 0.0, 1.0)
+        fast = np.clip(speed*0.15, 0.0, 1.0)
+        return np.hstack([fast, action])
+    @tf.function
+    def composer(q_values, p_batch=0, p_objectives=-4.0):
+        qs_c = p_mean(q_values, p=p_batch, axis=0)
+        # slow = qs_c[0]
+        fast = weaken(p_mean(qs_c[0:-num_actions], p=p_objectives), 2)
+        action = p_mean(weaken(qs_c[-num_actions:],2), p=1.0)
+        q_c = p_mean([fast, action], p=p_objectives)
+        return tf.stack([fast, action]), q_c
+    return CMORL(reward, composer)
 
 
 def bittle_rw(transition: Transition, env: OpenCatGymEnv):
@@ -28,18 +64,6 @@ def bittle_rw(transition: Transition, env: OpenCatGymEnv):
     # return np.hstack([[forward], change_direction, action_rw])
     return np.hstack([[forward], change_direction])
     # return np.array([forward])
-
-def mujoco_CMORL(speed_multiplier=1.0, num_actions=3):
-    @tf.function
-    def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
-        qs_c = p_mean(q_values, p=p_batch, axis=0)
-        forward = p_mean(qs_c[0:-num_actions], p=p_objectives)
-        action = p_mean(qs_c[-num_actions:], p=p_objectives)
-        # q_c = then(forward, action, slack=0.5) 
-        # q_c = forward
-        q_c = then(forward, action)
-        return tf.stack([forward, action]), q_c
-    return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=speed_multiplier), mujoco_composer)
 
 def composed_reward_fn(transition, env):
     rew_vec = mujoco_multi_dim_reward_joints_x_velocity(transition, env)

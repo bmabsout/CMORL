@@ -72,8 +72,8 @@ abbreviations = {
 def default_hypers():
     return HyperParams(
         ac_kwargs       = {
-            "critic_hidden_sizes": (400, 300),
-            "actor_hidden_sizes": (32, 32),
+            "critic_hidden_sizes": [400, 300],
+            "actor_hidden_sizes": [32, 32],
         },
         prev_folder     = None,
         seed            = int(time.time() * 1e5) % int(1e6),

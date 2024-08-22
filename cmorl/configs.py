@@ -3,6 +3,7 @@ from typing import Callable
 
 import gymnasium
 from gymnasium.wrappers.time_limit import TimeLimit
+import numpy as np
 
 from cmorl.rl_algs.ddpg.hyperparams import HyperParams, combine, default_hypers
 from cmorl.utils.reward_utils import CMORL, perf_schedule
@@ -40,23 +41,23 @@ env_configs: dict[str, Config] = {
         wrapper=partial(ForcedTimeLimit, max_episode_steps=200),
     ),
     "Ant-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=8),
-        HyperParams(env_args={"use_contact_forces": True}, epochs=100),
+        reward_fns.mujoco_CMORL(num_actions=8, speed_multiplier=0.5),
+        HyperParams(env_args={"use_contact_forces": True}, epochs=100, act_noise=0.05),
     ),
     "Hopper-v4": Config(
-        reward_fns.mujoco_CMORL(speed_multiplier=0.5, num_actions=3),
-        HyperParams(epochs=60, act_noise=0.1),
+        reward_fns.mujoco_CMORL(num_actions=3),
+        HyperParams(epochs=60, act_noise=0.05),
     ),
     "HalfCheetah-v4": Config(
-        reward_fns.mujoco_CMORL(speed_multiplier=0.15, num_actions=6),
+        reward_fns.halfcheetah_CMORL(),
         HyperParams(epochs=200, act_noise=0.05),
     ),
     "Pendulum-v1": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
         HyperParams(
             ac_kwargs = {
-                "critic_hidden_sizes": (128, 128),
-                "actor_hidden_sizes": (32, 32),
+                "critic_hidden_sizes": [128, 128],
+                "actor_hidden_sizes": [32, 32],
             },
             epochs=10,
         )

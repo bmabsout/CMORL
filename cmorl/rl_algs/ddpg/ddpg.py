@@ -266,7 +266,7 @@ def ddpg(
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return q_loss, q_bellman_c, keep_in_range
+        return q_loss, q_bellman_c, q_direct_c, keep_in_range
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
@@ -348,13 +348,15 @@ def ddpg(
             dones = tf.constant(batch["done"])
             estimated_values = tf.constant(batch["estimated_values"])
             # Q-learning update
-            qloss, q_bellman_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones, estimated_values)
+            qloss, q_bellman_c, q_direct_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones, estimated_values)
             logger.store(LossQ=qloss)
             weights_and_biases.log({"Q-Loss": qloss}, step=t)
             logger.store(Q_before_clip_c=1.0 - q_before_clip_c)
             logger.store(Q_bellman_c=1.0 - q_bellman_c)
+            logger.store(Q_direct_c=1.0 - q_direct_c)
             weights_and_biases.log({"Q-before_clip_c": 1.0 - q_before_clip_c}, step=t)
             weights_and_biases.log({"Q-bellman_c": 1.0 - q_bellman_c}, step=t)
+            weights_and_biases.log({"Q-direct_c": 1.0 - q_direct_c}, step=t)
             # Policy update
             (
                 all_c,
@@ -477,6 +479,7 @@ def ddpg(
             logger.log_tabular("Q_comp", average_only=True)
             logger.log_tabular("Q_before_clip_c", average_only=True)
             logger.log_tabular("Q_bellman_c", average_only=True)
+            logger.log_tabular("Q_direct_c", average_only=True)
             # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)

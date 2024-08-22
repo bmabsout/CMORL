@@ -86,6 +86,15 @@ class CMORL:
         example_rw = self.reward_fn(random_transition(env), env)
         return gym.spaces.Box(low = 0.0, high=1.0, shape=example_rw.shape, dtype=example_rw.dtype) 
 
+    def with_reward_fn(self, reward_fn):
+        return CMORL(reward_fn, self.q_composer, self.shape, self.randomization_schedule)
+
+    def with_q_composer(self, q_composer):
+        return CMORL(self.reward_fn, q_composer, self.shape, self.randomization_schedule)
+
+    def with_randomization_schedule(self, randomization_schedule):
+        return CMORL(self.reward_fn, self.q_composer, self.shape, randomization_schedule)
+
     def __call__(self, transition: Transition, env: gym.Env):
         return self.reward_fn(transition, env)
 

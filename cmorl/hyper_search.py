@@ -6,12 +6,15 @@ def random_args_generator(n=10):
     for seed in range(n):
         np_random, _ = seeding.np_random(seed)
         yield [
-            "-p_b", str(np_random.normal(0.0, 5)),
-            "-p_o", str(np_random.normal(0.0, 5)),
-            "-q_b", str(np_random.normal(0.0, 5)),
-            "-q_o", str(np_random.normal(0.0, 5)),
+            "-p_b", str(np_random.normal(0.0, 1)),
+            "-p_o", str(np_random.normal(0.0, 1)),
+            "-q_b", str(np_random.normal(0.0, 1)),
+            "-q_o", str(np_random.normal(0.0, 1)),
             "-q_d", str(np_random.uniform(0.1, 4.0)),
-            "--act_noise", str(np_random.uniform(0.01, 0.2)),
+            "--act_noise", str(2**np_random.uniform(-5, -1.5)),
+            "--gamma", str(1.0 - 10**np_random.uniform(-3, -1)),
+            "--replay_size", str(int(10**np_random.uniform(4, 6))),
+            "--polyak", str(1.0 - 10**np_random.uniform(-3, -1)),
         ]
 
 def run_training(env_name, args):
@@ -30,6 +33,6 @@ if __name__ == "__main__":
     ]
     
     # Create a pool of worker processes
-    with mp.Pool(processes=6) as pool:
+    with mp.Pool(processes=10) as pool:
         # Map the run_training function to the process arguments
         pool.starmap(run_training, process_args)
