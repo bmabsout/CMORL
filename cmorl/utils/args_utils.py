@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import json
 from typing import Any, Optional, Iterator
 import copy
 from cmorl.utils.serialization_utils import serialize_dict
@@ -99,8 +100,18 @@ def get_minified_args_dict(serializer: Arg_Serializer, hypers: dict[str, Any], s
     return {"args":serialize_me,"ignored": ignored_args,"extra": extra_args}
 
 def namespace_serializer(namespace: argparse.Namespace, ignored:set[str]=set(), descriptions:dict[str, str]={}, abbrevs:dict[str, str]={}):
+    def get_serializer_type(v):
+        return json.loads if type(v) == dict else type(v)
     return Arg_Serializer(
-        *(Serialized_Argument(name=k, type=type(v), abbrev=abbrevs.get(k), default=v, help=descriptions.get(k)) for k, v in vars(namespace).items())
-        , ignored=ignored
+        *(
+            Serialized_Argument(
+                name=k,
+                type=get_serializer_type(v),
+                abbrev=abbrevs.get(k),
+                default=v,
+                help=descriptions.get(k)
+            )
+            for k, v in vars(namespace).items()
+        ), ignored=ignored
     )
 
