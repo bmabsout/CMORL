@@ -245,7 +245,7 @@ def ddpg(
             q_bellman_c = p_mean(p_mean(td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
             q_direct_c = weaken(p_mean(p_mean(estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives), hp.qd_power)
 
-            full_q_c = p_mean([q_bellman_c, q_direct_c, keep_in_range], p=0.0)
+            full_q_c = p_mean([q_bellman_c, q_direct_c, keep_in_range], p=1.0)
             
             with_reg = full_q_c
 

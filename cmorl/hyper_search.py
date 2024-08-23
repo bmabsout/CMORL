@@ -1,21 +1,40 @@
+import argparse
 import multiprocessing as mp
 from gymnasium.utils import seeding
 from cmorl import train
 
-def random_args_generator(n=10):
+def parse_hypersearch_args(args=None):
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "env_name", type=str, help="environment name (used in gym.make)"
+    )
+    parser.add_argument(
+        "--hyperseed", type=int, default=1, help="seed for random number generator"
+    )
+    parser.add_argument(
+        "--num_searches", type=int, default=10, help="number of random searches to perform"
+    )
+
+    parser.add_argument(
+        "--experiment_name", "-n", type=str, default="hypersearch", help="experiment name"
+    )
+    return parser.parse_known_args(args)
+
+def random_args_generator(hyperseed, n=10):
     for seed in range(n):
-        np_random, _ = seeding.np_random(seed)
+        np_random, _ = seeding.np_random(hyperseed)
+        np_random, _ = seeding.np_random(int(np_random.integers(1e10) + seed))
         yield [
-            "-p_b", str(np_random.normal(0.0, 1)),
-            "-p_o", str(np_random.normal(0.0, 1)),
-            "-q_b", str(np_random.normal(0.0, 1)),
-            "-q_o", str(np_random.normal(0.0, 1)),
-            "-q_d", str(np_random.uniform(0.1, 4.0)),
+            # "-p_b", str(np_random.normal(0.0, 1)),
+            # "-p_o", str(np_random.normal(0.0, 1)),
+            # "-q_b", str(np_random.normal(0.0, 1)),
+            # "-q_o", str(np_random.normal(0.0, 1)),
+            "-q_d", str(np_random.uniform(0.1, 7.0)),
             "--act_noise", str(2**np_random.uniform(-5, -1.5)),
-            "--batch_size", str(30, 500),
-            "--gamma", str(1.0 - 10**np_random.uniform(-3, -1)),
-            "--replay_size", str(int(10**np_random.uniform(4, 6))),
-            "--polyak", str(1.0 - 10**np_random.uniform(-3, -1)),
+            # "--batch_size", str(int(np_random.uniform(30, 500))),
+            # "--gamma", str(1.0 - 10**np_random.uniform(-3, -1)),
+            # "--replay_size", str(int(10**np_random.uniform(4, 6))),
+            # "--polyak", str(1.0 - 10**np_random.uniform(-3, -1)),
         ]
 
 def run_training(env_name, args):
@@ -25,12 +44,12 @@ def run_training(env_name, args):
         print(f"Error: {e}")
 
 if __name__ == "__main__":
-    cmd_args, rest_of_args = train.parse_env_name()
+    cmd_args, rest_of_args = parse_hypersearch_args()
     
     # Prepare arguments for each process
     process_args = [
-        (cmd_args.env_name, ["-n", "hypersearch", "--seed", "1"] + random_args + rest_of_args)
-        for random_args in random_args_generator()
+        (cmd_args.env_name, ["-n", cmd_args.experiment_name, "--seed", "1"] + random_args + rest_of_args)
+        for random_args in random_args_generator(cmd_args.hyperseed, cmd_args.num_searches)
     ]
     
     # Create a pool of worker processes

@@ -91,10 +91,10 @@ def default_hypers():
         train_every     = 50,
         train_steps     = 30,
         p_batch         = 1.0,
-        p_objectives    = -4.0,
+        p_objectives    = -1.0,
         q_batch         = 1.0,
         q_objectives    = 1.0,
-        qd_power        = 1.0,
+        qd_power        = 3.0,
         env_args        = {}
     )
 

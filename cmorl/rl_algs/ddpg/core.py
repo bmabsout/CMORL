@@ -69,7 +69,7 @@ class ClipLayer(Activation):
         self.max = max
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: clip_preserve_grads(x, min, max), **kwargs)
+        super().__init__(activation=lambda x: tf.clip_by_value(x, min, max), **kwargs)
 
     def get_config(self):
         config = super().get_config()
