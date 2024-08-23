@@ -240,12 +240,12 @@ def ddpg(
             keep_in_range = p_mean(
                 move_towards_range(before_clip, 0.0, 1.0), p=-4.0
             )
-            td0_error = tf.abs(q - backup)
-            estimated_tdinf_error = tf.abs(q - estimated_values)
-            q_bellman_c = p_mean(p_mean(1.0 - td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
-            q_direct_c = weaken(p_mean(p_mean(1.0 - estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives), hp.qd_power)
+            td0_error = 1.0 - tf.abs(q - backup)
+            estimated_tdinf_error = 1.0 - tf.abs(q - estimated_values)
+            q_bellman_c = p_mean(p_mean(td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
+            q_direct_c = weaken(p_mean(p_mean(estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives), hp.qd_power)
 
-            full_q_c = p_mean([q_bellman_c, q_direct_c], p=0.0)
+            full_q_c = p_mean([q_bellman_c, q_direct_c, keep_in_range], p=0.0)
             
             with_reg = full_q_c
 
@@ -280,8 +280,8 @@ def ddpg(
             qs_c, q_c = q_composer(
                 q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives
             )
-            # all_c = p_mean([q_c, before_clip_c], p=1.0)
-            all_c = q_c
+            all_c = p_mean([q_c, before_clip_c], p=1.0)
+            # all_c = q_c
             pi_loss = 1.0 - all_c
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if any(tf.reduce_any(tf.math.is_nan(grad)) for grad in grads):
@@ -364,14 +364,14 @@ def ddpg(
                 q_c,
                 before_clip_c,
             ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
+            logger.store(actor_before_clip_c=1.0 - before_clip_c)
 
             qs_c = qs_c.numpy()
             logger.store(
                 Q_comp=q_c,
-                before_clip=before_clip_c,
             )
             weights_and_biases.log(
-                {"Q-composed": q_c, "before_clip": before_clip_c},
+                {"Q-composed": q_c, "before_clip": 1.0 - before_clip_c},
                 step=t
             )
             qs_dict_ = {}
@@ -476,6 +476,7 @@ def ddpg(
             # logger.log_tabular("Qs", average_only=True)
             for i in range(qs_c.shape[0]):
                 logger.log_tabular(f"Q{i}", average_only=True)
+            logger.log_tabular("actor_before_clip_c", average_only=True)
             logger.log_tabular("Q_comp", average_only=True)
             logger.log_tabular("Q_before_clip_c", average_only=True)
             logger.log_tabular("Q_bellman_c", average_only=True)

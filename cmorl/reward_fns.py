@@ -71,7 +71,7 @@ def composed_reward_fn(transition, env):
     return reward
 
 def multi_dim_reacher(transition: Transition, env: ReacherEnv) -> np.ndarray:
-    reward_performance = 1.0 - np.clip(np.abs(transition.next_state[-3:-1])/0.2, 0.0, 1.0)
+    reward_performance = 1.0 - np.clip(np.abs(transition.next_state[-3:-1])/0.1, 0.0, 1.0)
     reward_actuation = 1 - np.abs(transition.action)
     # print(transition.next_state[-3:-1])
     # print("rw:", reward_performance)
