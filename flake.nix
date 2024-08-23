@@ -34,7 +34,7 @@
           in pkgs.mkShell {
               buildInputs = [
                   pkgs.nixgl.nixGLIntel
-                  (python.withPackages (p: [cmorl]))
+                  (python.withPackages (p: cmorl.propagatedBuildInputs))
               ];
               shellHook = ''
                 export PYTHONPATH=$PYTHONPATH:$(pwd) # to allow cmorl to be imported as editable

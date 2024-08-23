@@ -47,7 +47,7 @@ def clip_preserve_grads(val, min, max):
 def clip_keep_in_range(val, min, max):
     clip_t = tf.clip_by_value(val, min, max)
     def grad(dy):
-        push_to_range = tf.where(val > max, 1e-3, tf.where(val < min, -1e-3, dy))
+        push_to_range = tf.where(val > max, 1e-2, tf.where(val < min, -1e-2, dy))
         return push_to_range, None, None
     return clip_t, grad
 
