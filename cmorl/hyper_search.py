@@ -12,6 +12,7 @@ def random_args_generator(n=10):
             "-q_o", str(np_random.normal(0.0, 1)),
             "-q_d", str(np_random.uniform(0.1, 4.0)),
             "--act_noise", str(2**np_random.uniform(-5, -1.5)),
+            "--batch_size", str(30, 500),
             "--gamma", str(1.0 - 10**np_random.uniform(-3, -1)),
             "--replay_size", str(int(10**np_random.uniform(4, 6))),
             "--polyak", str(1.0 - 10**np_random.uniform(-3, -1)),
