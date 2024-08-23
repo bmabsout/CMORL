@@ -11,7 +11,7 @@ from gymnasium.envs.mujoco.mujoco_env import MujocoEnv
 from envs.Bittle.opencat_gym_env import OpenCatGymEnv
 
 def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: MujocoEnv, speed_multiplier=1.0):
-    action = (1.0 - np.abs(transition.action))
+    action = (1.0 - transition.action**2.0)
     if not hasattr(env, "prev_xpos"):
         env.prev_xpos = np.copy(env.data.xpos) # type: ignore
     x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
@@ -26,7 +26,7 @@ def mujoco_CMORL(num_actions=3, speed_multiplier=1.0):
     def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
         speed = p_mean(qs_c[0:-num_actions], p=p_objectives)
-        action = p_mean(weaken(qs_c[-num_actions:],2), p=1.0)
+        action = p_mean(qs_c[-num_actions:], p=p_objectives)
         # q_c = then(forward, action, slack=0.5) 
         # q_c = forward
         q_c = p_mean([speed, action], p=p_objectives)
@@ -36,22 +36,22 @@ def mujoco_CMORL(num_actions=3, speed_multiplier=1.0):
 def halfcheetah_CMORL():
     num_actions = 6
     def reward(transition: Transition, env: MujocoEnv):
-        action = (1.0 - np.abs(transition.action))
+        action = (1.0 - transition.action**2.0)
         if not hasattr(env, "prev_xpos"):
             env.prev_xpos = np.copy(env.data.xpos) # type: ignore
         x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
         env.prev_xpos = np.copy(env.data.xpos) # type: ignore
         speed = x_velocities[1:, 0]
         # slow = np.clip(speed, 0.0, 1.0)
-        fast = np.clip(speed*0.15, 0.0, 1.0)
+        fast = np.clip(speed*0.2, 0.0, 1.0)
         return np.hstack([fast, action])
     @tf.function
     def composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
         # slow = qs_c[0]
-        fast = weaken(p_mean(qs_c[0:-num_actions], p=p_objectives), 2)
-        action = p_mean(weaken(qs_c[-num_actions:],2), p=1.0)
-        q_c = p_mean([fast, action], p=p_objectives)
+        fast = p_mean(qs_c[0:-num_actions], p=p_objectives)
+        action = p_mean(qs_c[-num_actions:], p=p_objectives)
+        q_c = p_mean([fast, action], p=0.0)
         return tf.stack([fast, action]), q_c
     return CMORL(reward, composer)
 
@@ -75,7 +75,7 @@ def multi_dim_reacher(transition: Transition, env: ReacherEnv) -> np.ndarray:
     reward_actuation = 1 - np.abs(transition.action)
     # print(transition.next_state[-3:-1])
     # print("rw:", reward_performance)
-    rw_vec = np.concatenate([reward_performance**2.0, reward_actuation], dtype=np.float32)
+    rw_vec = np.concatenate([reward_performance, reward_actuation], dtype=np.float32)
     return rw_vec
 
 def normed_angular_distance(a, b):

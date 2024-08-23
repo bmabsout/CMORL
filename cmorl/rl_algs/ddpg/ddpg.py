@@ -243,9 +243,9 @@ def ddpg(
             td0_error = tf.abs(q - backup)
             estimated_tdinf_error = tf.abs(q - estimated_values)
             q_bellman_c = p_mean(p_mean(1.0 - td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
-            q_direct_c = p_mean(p_mean(1.0 - estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
+            q_direct_c = weaken(p_mean(p_mean(1.0 - estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives), hp.qd_power)
 
-            full_q_c = p_mean([q_bellman_c, weaken(q_direct_c, hp.qd_power)], p=0.0)
+            full_q_c = p_mean([q_bellman_c, q_direct_c], p=0.0)
             
             with_reg = full_q_c
 
