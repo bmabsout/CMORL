@@ -44,11 +44,11 @@ def clip_preserve_grads(val, min, max):
     return val + tf.stop_gradient(clip_t - val)
 
 @tf.custom_gradient
-def clip_keep_in_range(val, min, max):
+def clip_keep_in_range(val, min, max, push_strength):
     clip_t = tf.clip_by_value(val, min, max)
     def grad(dy):
-        push_to_range = tf.where(val > max, dy+1e-2, tf.where(val < min, dy -1e-2, dy))
-        return push_to_range, None, None
+        push_to_range = tf.where(val > max, dy+push_strength, tf.where(val < min, dy-push_strength, dy))
+        return push_to_range, None, None, None
     return clip_t, grad
 
 @tf.function
@@ -78,7 +78,7 @@ def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype
         , lambda: tf.broadcast_to(default_val, tf_pop(tf.shape(slacked), axis)) if axis else default_val
         , lambda: (tf.reduce_mean(stabilized_l**p, axis=axis))**(1.0/p) - slack)*stabilizer
     
-    return clip_keep_in_range(p_meaned, tf.reduce_min(l), tf.reduce_max(l))
+    return clip_preserve_grads(p_meaned, tf.reduce_min(l), tf.reduce_max(l))
 
 @tf.function
 def simple_p_mean(l: tf.Tensor, p: float, axis=0) -> tf.Tensor:
@@ -87,6 +87,10 @@ def simple_p_mean(l: tf.Tensor, p: float, axis=0) -> tf.Tensor:
 # @tf.custom_gradient
 # def fixed_grad_p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None, dtype=tf.float64):
 #     return p_mean(l, p, slack, default_val, axis, dtype), lambda dy: dy * tf.ones_like(l), None, None, None
+
+@tf.function
+def inv_mean(l, p=0, axis=0):
+    return 1.0 - p_mean(1.0-tf.convert_to_tensor(l), p, axis=axis)
 
 @tf.function
 def p_to_min(l, p=0, q=0):
