@@ -36,6 +36,6 @@ def serialize_leaf(k: str, o: Any) -> str:
     return str(o)
 
 
-def serialize_dict(args: dict, ignored: dict, extra: dict) -> str:
-    all_args = {**args, "x": ignored}
+def serialize_dict(args: dict, minified: dict, extra: dict) -> str:
+    all_args = {**args, "x": minified}
     return ",".join([f"{k}:{serialize_leaf(k, v)}" for k, v in sorted(all_args.items(), key=lambda kv: kv[0]) if v is not None])

@@ -89,7 +89,7 @@ def default_hypers():
         act_noise       = 0.1,
         max_ep_len      = None,
         train_every     = 50,
-        train_steps     = 30,
+        train_steps     = 50,
         p_batch         = 1.0,
         p_objectives    = -1.0,
         q_batch         = 1.0,
@@ -113,7 +113,7 @@ def rl_alg_serializer(experiment_name=None):
             default=experiment_name,
             help="name of the experiment"
         ),
-        ignored={"experiment_name"}, # figure out a way to handle experiment_name, as it shouldn't be included int he x: part
+        ignored={"experiment_name"},
     )
 
 

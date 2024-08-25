@@ -80,6 +80,7 @@ def get_minified_args_dict(serializer: Arg_Serializer, hypers: dict[str, Any], s
     ignored_args = {}
     extra_args = {}
     serialize_me: dict[str, Any] = {}
+    minified = {}
     name_to_args = serializer.name_to_args()
     for name, value in hypers.items():
         arg = name_to_args[name]
@@ -93,11 +94,11 @@ def get_minified_args_dict(serializer: Arg_Serializer, hypers: dict[str, Any], s
             serialize_me[arg.id()] = value
             continue
         if value == arg.default:
-            ignored_args[name] = value
+            minified[name] = value
             continue
 
         serialize_me[arg.id()] = value
-    return {"args":serialize_me,"ignored": ignored_args,"extra": extra_args}
+    return {"args":serialize_me,"minified": minified, "extra": {**extra_args, **ignored_args}}
 
 def namespace_serializer(namespace: argparse.Namespace, ignored:set[str]=set(), descriptions:dict[str, str]={}, abbrevs:dict[str, str]={}):
     def get_serializer_type(v):

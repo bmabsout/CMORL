@@ -54,8 +54,8 @@ if __name__ == "__main__":
     
     # Prepare arguments for each process
     process_args = [
-        (cmd_args.env_name, ["-n", cmd_args.experiment_name, "--seed", "1"] + random_args + rest_of_args)
-        for random_args in random_args_generator(cmd_args.hyperseed, cmd_args.num_searches)
+        (cmd_args.env_name, ["-n", cmd_args.experiment_name] + random_args + rest_of_args)
+        for random_args in random_args_generator(cmd_args.hyperseed, cmd_args.num_searches, cmd_args.num_seeds)
     ]
     
     # Create a pool of worker processes
