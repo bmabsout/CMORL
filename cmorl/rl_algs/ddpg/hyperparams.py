@@ -94,9 +94,9 @@ def default_hypers():
         train_steps     = 50,
         p_batch         = 1.0,
         p_objectives    = -1.0,
-        q_batch         = 1.0,
+        q_batch         = 2.0,
         q_objectives    = 1.0,
-        qd_power        = 3.0,
+        qd_power        = 2.0,
         env_args        = {}
     )
 
