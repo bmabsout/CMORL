@@ -4,6 +4,7 @@ from cmorl.configs import ForcedTimeLimit
 from cmorl.rl_algs.ddpg.ddpg import add_noise_to_weights
 from cmorl.utils import save_utils
 import numpy as np
+import tensorflow as tf
 
 from cmorl.utils.reward_utils import CMORL, Transition, discounted_window, estimated_value_fn, values
 

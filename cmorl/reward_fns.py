@@ -20,13 +20,12 @@ def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: Mujoc
     return np.hstack([speed, action])
 
 
-
 def mujoco_CMORL(num_actions=3, speed_multiplier=1.0):
     @tf.function
     def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
         speed = p_mean(qs_c[0:-num_actions], p=p_objectives)
-        action = p_mean(qs_c[-num_actions:], p=p_objectives)
+        action = p_mean(qs_c[-num_actions:], p=p_objectives)**2.0
         # q_c = then(forward, action, slack=0.5) 
         # q_c = forward
         q_c = p_mean([speed, action], p=p_objectives)
@@ -51,7 +50,7 @@ def halfcheetah_CMORL():
         # slow = qs_c[0]
         fast = p_mean(qs_c[0:-num_actions], p=p_objectives)
         action = p_mean(qs_c[-num_actions:], p=p_objectives)
-        q_c = p_mean([fast, action], p=0.0)
+        q_c = p_mean([fast, action], p=1.0)
         return tf.stack([fast, action]), q_c
     return CMORL(reward, composer)
 
@@ -116,9 +115,10 @@ def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
     speed = transition.next_state[2:4] / env.observation_space.high[2:4] # type: ignore
     minize_speed_near_ground = 1.0 - np.clip(np.linalg.norm(speed)*10.0, 0.0, 1.0)
     legs = transition.next_state[6:8]*minize_speed_near_ground
-    fuel_costs = 1.0 - np.abs(transition.action/env.action_space.high) # type: ignore
+    fuel_cost_bottom = 1.0 - ((transition.action[0]+1.0)/2.0)
+    fuel_cost_lr = 1.0 - np.abs(transition.action[1])
     # return np.concatenate([[nearness**4.0, very_nearness**2.0], fuel_costs, legs])
-    return np.concatenate([[nearness, very_nearness], fuel_costs, legs])
+    return np.concatenate([[nearness, very_nearness], [fuel_cost_lr, fuel_cost_bottom], legs])
     # return np.concatenate([[nearness**4.0]])
     # return legs
 
@@ -130,9 +130,9 @@ def lander_composer(q_values, p_batch=0, p_objectives=-4.0):
     very_nearness = qs_c[1]
     legs_touch = p_mean(qs_c[4:6], p=2.0)
     fuel_cost = p_mean(qs_c[2:4], p=1.0)
-    q_c = curriculum((nearness, very_nearness, legs_touch, fuel_cost), p=p_objectives)
+    q_c = p_mean([curriculum((nearness, very_nearness, legs_touch)), fuel_cost], p=p_objectives)
     # q_c = then(land, fuel_cost)
-    return tf.concat([qs_c, [nearness, very_nearness, legs_touch]],axis=0), q_c #(1.0 - (1.0 - q_c)**2.0)
+    return tf.concat([qs_c, [nearness, very_nearness, legs_touch, fuel_cost]],axis=0), q_c #(1.0 - (1.0 - q_c)**2.0)
 
 @tf.function
 def lander_composer2(q_values, p_batch=0, p_objectives=-4.0):

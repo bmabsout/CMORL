@@ -70,7 +70,7 @@ class ClipLayer(Activation):
         self.push_strength = push_strength
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: clip_keep_in_range(x, min, max, push_strength), **kwargs)
+        super().__init__(activation=lambda x: tf.sigmoid(x*3.5)*(max-min) + min, **kwargs)
 
     def get_config(self):
         config = super().get_config()
@@ -85,6 +85,12 @@ class ClipLayer(Activation):
     def from_config(cls, config):
         return cls(**config)
 
+
+class CriticActivation(Activation):
+    def __init__(self, **kwargs):
+        if "activation" in kwargs:
+            del kwargs["activation"]
+        super().__init__(activation=lambda x: tf.tanh(3.5*(x**2.0)), **kwargs)
 
 def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer, seed=42, push_strength=1e-3):
     inputs = Input([obs_space.shape[0]])
@@ -101,6 +107,7 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
     )
     # tanhed = Activation("tanh")(linear_output)
     clipped = ClipLayer(-1.0, 1.0, push_strength)(linear_output)
+    # clipped = Lambda(lambda x: tf.tanh(x*3.5), output_shape=lambda o:o)(linear_output)
     # scaled = scale_by_space(normed, act_space)
     model = keras.Model(inputs, clipped)
     model.compile()
@@ -123,12 +130,11 @@ def critic(
         normalized_input, hidden_sizes + [rwds_dim], output_activation=None, kernel_constraint=None, use_dropout=False, seed=seed, activation="relu"
     )
 
-    # name the layer before sigmoid
-    before_clip = Lambda(lambda x: x**2.0, name="before_clip", output_shape=lambda o:o)(outputs)
-    # before_clip =  RescalingFixed(1.0, offset=0.3, name="before_clip")(outputs)
+    # # name the layer before sigmoid
+    # before_clip =  outputs
 
-    biased_normed = ClipLayer(0.0, 1.0, push_strength)(before_clip)
-    model = keras.Model(inputs, biased_normed)
+    normed = CriticActivation()(outputs)
+    model = keras.Model(inputs, normed)
     model.compile()
     return model
 
