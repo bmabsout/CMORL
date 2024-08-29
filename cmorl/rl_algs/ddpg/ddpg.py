@@ -227,19 +227,20 @@ def ddpg(
 
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones, estimated_values):
+        pi_targ = pi_targ_network(obs2)
+        q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["q"]
+        batch_size = tf.shape(dones)[0]
+        normalization_factor = (1.0 - hp.gamma)
+        broadcasted_dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
+        backup = tf.stop_gradient(rews*normalization_factor + (1.0 - broadcasted_dones) * hp.gamma * q_pi_targ)
+        # soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
         with tf.GradientTape() as tape:
             outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
             q, before_clip = outputs["q"], outputs["before_clip"]
-            pi_targ = pi_targ_network(obs2)
-            q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["q"]
-            batch_size = tf.shape(dones)[0]
+            # tensorflow equivalent of with torch.no_grad():
 
-            dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
-            normalization_factor = (1.0 - hp.gamma)
-            backup = tf.stop_gradient(rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_targ)
-            # soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
             keep_in_range = p_mean(
-                move_towards_range(before_clip, -1.0, 1.0), p=-4.0
+                move_towards_range(before_clip, -2.0, 2.0), p=-4.0
             )
             td0_error = 1.0 - tf.abs(q - backup)
             estimated_tdinf_error = 1.0 - tf.abs(q - estimated_values)

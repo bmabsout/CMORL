@@ -45,12 +45,12 @@ env_configs: dict[str, Config] = {
         HyperParams(env_args={"use_contact_forces": True}, epochs=100, act_noise=0.05),
     ),
     "Hopper-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=3),
-        HyperParams(epochs=20, act_noise=0.1),
+        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.7),
+        HyperParams(epochs=20, act_noise=0.1, qd_power=1.0, q_batch=1.0),
     ),
     "HalfCheetah-v4": Config(
         reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.2),
-        HyperParams(epochs=200, act_noise=0.1),
+        HyperParams(epochs=200, act_noise=0.1, p_objectives=0.5),
     ),
     "Pendulum-v1": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),

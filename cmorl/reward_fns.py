@@ -20,12 +20,12 @@ def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: Mujoc
     return np.hstack([speed, action])
 
 
-def mujoco_CMORL(num_actions=3, speed_multiplier=1.0):
+def mujoco_CMORL(num_actions, speed_multiplier=1.0):
     @tf.function
     def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
         speed = p_mean(qs_c[0:-num_actions], p=p_objectives)
-        action = p_mean(qs_c[-num_actions:], p=p_objectives)**2.0
+        action = p_mean(qs_c[-num_actions:], p=p_objectives)
         # q_c = then(forward, action, slack=0.5) 
         # q_c = forward
         q_c = p_mean([speed, action], p=p_objectives)
