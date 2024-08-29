@@ -50,7 +50,7 @@ env_configs: dict[str, Config] = {
     ),
     "HalfCheetah-v4": Config(
         reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.2),
-        HyperParams(epochs=200, act_noise=0.1, p_objectives=0.5),
+        HyperParams(epochs=200, act_noise=0.1, p_objectives=0.5, q_batch=2.0, qd_power=2.0),
     ),
     "Pendulum-v1": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
