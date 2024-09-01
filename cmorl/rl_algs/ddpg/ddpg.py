@@ -240,14 +240,14 @@ def ddpg(
             # tensorflow equivalent of with torch.no_grad():
 
             keep_in_range = p_mean(
-                move_towards_range(before_clip, -2.0, 2.0), p=-4.0
+                move_towards_range(before_clip, -1.0, 1.0), p=-4.0
             )
             td0_error = 1.0 - tf.abs(q - backup)
             estimated_tdinf_error = 1.0 - tf.abs(q - estimated_values)
-            q_bellman_c = p_mean(inv_mean(td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
-            q_direct_c = weaken(p_mean(inv_mean(estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives), hp.qd_power)
+            q_bellman_c = p_mean(p_mean(td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
+            q_direct_c = weaken(p_mean(p_mean(estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives), hp.qd_power)
 
-            full_q_c = p_mean([q_bellman_c, q_direct_c, keep_in_range], p=0.0)
+            full_q_c = p_mean([q_bellman_c, keep_in_range], p=-1.0)
             
             with_reg = full_q_c
 

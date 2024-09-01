@@ -29,12 +29,12 @@ def random_args_generator(hyperseed, num_searches, num_seeds):
         np_random, _ = seeding.np_random(hyperseed)
         np_random, _ = seeding.np_random(int(np_random.integers(1e10) + hyper_search_seed))
         random_hypers = [
-            "-p_b", str(np_random.normal(0.0, 1)),
+            # "-p_b", str(np_random.normal(0.0, 1)),
             # "-p_o", str(np_random.normal(0.0, 1)),
-            "-q_b", str(np_random.normal(0.0, 1)),
+            # "-q_b", str(np_random.normal(0.0, 1)),
             # "-q_o", str(np_random.normal(0.0, 1)),
-            "-q_d", str(np_random.uniform(0.2, 5.0)),
-            "--act_noise", str(2**np_random.uniform(-5, -0.5)),
+            # "-q_d", str(np_random.uniform(0.2, 5.0)),
+            # "--act_noise", str(2**np_random.uniform(-5, -0.5)),
             # "--batch_size", str(int(np_random.uniform(30, 500))),
             # "--gamma", str(1.0 - 10**np_random.uniform(-3, -1)),
             # "--replay_size", str(int(10**np_random.uniform(4, 6))),

@@ -46,11 +46,21 @@ env_configs: dict[str, Config] = {
     ),
     "Hopper-v4": Config(
         reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.7),
-        HyperParams(epochs=20, act_noise=0.1, qd_power=1.0, q_batch=1.0),
+        HyperParams(
+            ac_kwargs = {
+                "critic_hidden_sizes": [512, 512],
+                "actor_hidden_sizes": [32, 32],
+            },
+            epochs=20,
+            act_noise=0.1,
+            p_objectives=-1.0,
+            p_batch=1.0,
+            q_batch=1.0,
+            q_objectives=1.0),
     ),
     "HalfCheetah-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.2),
-        HyperParams(epochs=200, act_noise=0.1, p_objectives=0.5, q_batch=2.0, qd_power=2.0),
+        reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.1),
+        HyperParams(epochs=200, act_noise=0.0, p_objectives=0.0),
     ),
     "Pendulum-v1": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
@@ -60,6 +70,10 @@ env_configs: dict[str, Config] = {
                 "actor_hidden_sizes": [32, 32],
             },
             epochs=10,
+            pi_lr=3e-3,
+            q_lr=3e-3,
+            act_noise=0.0,
+            p_objectives=-4.0,
         )
     ),
     "Pendulum-custom": Config(
