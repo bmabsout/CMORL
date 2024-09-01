@@ -59,16 +59,16 @@ def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmor
     return os, rs, cmorl_rs, rsum, vals
 
 
-def folder_to_results(env, render, num_tests, folder_path, force_truncate_at=None, cmorl=None, max_ep_len=None, **kwargs):
+def folder_to_results(env, render, num_tests, folder_path, force_truncate_at=None, cmorl=None, max_ep_len=None, act_noise=0.0, **kwargs):
     saved_actor = save_utils.load_actor(folder_path)
     saved_critic = save_utils.load_critic(folder_path)
 
     def actor(x, np_random):
-        return add_noise_to_weights(x, saved_actor, env.action_space, 0.0, np_random)
+        return add_noise_to_weights(x, saved_actor, env.action_space, act_noise, np_random)
     def critic(o, a):
         return saved_critic(np.hstack([o, a], dtype=np.float32))
     runs = [
-        test(actor, critic, env, seed=17 + i, render=render, force_truncate_at=force_truncate_at, cmorl=cmorl, max_ep_len=max_ep_len)
+        test(actor, critic, env, seed=17 + i, render=render, force_truncate_at=force_truncate_at, cmorl=cmorl,max_ep_len=max_ep_len)
         for i in range(num_tests)
     ]
     return runs
