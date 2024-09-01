@@ -158,6 +158,10 @@ def curriculum(l, slack=0.1, p=-1.0):
 def weaken(x, weaken_by=5.0):
     return 1.0 - (1.0-x)**tf.cast(weaken_by, x.dtype)
 
+@tf.function
+def clip_to(val, min, max, to_min=0.0, to_max=1.0):
+    return tf.clip_by_value((val-min)/(max-min), 0.0, 1.0)*(to_max-to_min) + to_min
+
 # if __name__ == "__main__":
 #     import matplotlib.pyplot as plt
 #     with tf.GradientTape() as gt:
