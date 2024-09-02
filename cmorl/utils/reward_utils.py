@@ -74,7 +74,7 @@ def perf_schedule(t, total_steps, perf):
     return 1.0-perf
 
 class CMORL:
-    def __init__(self, reward_fn: RewardFnType, q_composer: Callable = default_q_composer, shape: int | None = None, randomization_schedule = perf_schedule):
+    def __init__(self, reward_fn: RewardFnType, q_composer: Callable = default_q_composer, shape: int | None = None, randomization_schedule = linear_time_schedule):
         self.reward_fn = reward_fn
         self.q_composer = q_composer
         self.shape = shape

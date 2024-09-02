@@ -45,12 +45,13 @@ env_configs: dict[str, Config] = {
         HyperParams(env_args={"use_contact_forces": True}, epochs=100, act_noise=0.05),
     ),
     "Hopper-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.7),
+        # reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.7),
+        None,
         HyperParams(
-            ac_kwargs = {
-                "critic_hidden_sizes": [512, 512],
-                "actor_hidden_sizes": [32, 32],
-            },
+            # ac_kwargs = {
+            #     "critic_hidden_sizes": [512, 512],
+            #     "actor_hidden_sizes": [32, 32],
+            # },
             epochs=20,
             act_noise=0.1,
             p_objectives=-1.0,
