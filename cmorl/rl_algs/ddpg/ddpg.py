@@ -232,7 +232,7 @@ def ddpg(
         batch_size = tf.shape(dones)[0]
         normalization_factor = (1.0 - hp.gamma)
         broadcasted_dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
-        backup = tf.stop_gradient(rews*normalization_factor + (1.0 - broadcasted_dones) * hp.gamma * q_pi_targ)
+        backup = rews*normalization_factor + (1.0 - broadcasted_dones) * hp.gamma * q_pi_targ
         # soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
         with tf.GradientTape() as tape:
             outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
