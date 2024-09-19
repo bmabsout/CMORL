@@ -247,6 +247,7 @@ def ddpg(
             q_direct_c = tf.reduce_mean(estimated_tdinf_error**2.0)
 
             q_loss = q_bellman_c + q_direct_c*hp.qd_power #- keep_in_range*10.0
+            # q_loss = tf.reduce_mean(td0_error**2.0 + hp.qd_power*estimated_tdinf_error**2.0)
             # tf.print("","before_clip_min", np_const_width(1.0 - p_mean(1.0 - outputs["before_before_clip"], p=20.0, axis=0)), "\n"
             # , "before_clip_max", np_const_width(p_mean(outputs["before_before_clip"], p=20.0, axis=0)), "\n"
             # , "q_min", np_const_width(1.0 - p_mean(1.0 - q, p=20.0, axis=0)), "\n"
@@ -268,16 +269,16 @@ def ddpg(
             pi, before_clip = outputs["pi"], outputs["before_clip"]
             before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-4.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            q_c = tf.reduce_mean(q_values)
-            qs_c = tf.expand_dims(q_c, 0)
+            qs_c, q_c = q_composer(q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives)
+            # qs_c = tf.expand_dims(q_c, 0)
             # all_c = p_mean([q_c, before_clip_c], p=0.0)
             all_c = q_c
             pi_loss = -q_c + tf.reduce_mean(tf.where(before_clip > 1, before_clip, tf.where(before_clip < -1.0, -before_clip, 0.0))**2.0)
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
-        if any(tf.reduce_any(tf.math.is_nan(grad)) for grad in grads):
-            tf.print(q_values)
-            tf.print(pi)
-            breakpoint()
+        # if any(tf.reduce_any(tf.math.is_nan(grad)) for grad in grads):
+        #     tf.print(q_values)
+        #     tf.print(pi)
+        #     breakpoint()
         # if debug:
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
 

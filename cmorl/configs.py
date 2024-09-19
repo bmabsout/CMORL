@@ -45,8 +45,8 @@ env_configs: dict[str, Config] = {
         HyperParams(env_args={"use_contact_forces": True}, epochs=100, act_noise=0.05),
     ),
     "Hopper-v4": Config(
-        # reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.7),
-        None,
+        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.7),
+        # None,
         HyperParams(
             # ac_kwargs = {
             #     "critic_hidden_sizes": [512, 512],
@@ -64,7 +64,8 @@ env_configs: dict[str, Config] = {
         HyperParams(epochs=200, act_noise=0.0, p_objectives=0.0),
     ),
     "Pendulum-v1": Config(
-        CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
+        # CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
+        None,
         HyperParams(
             ac_kwargs = {
                 "critic_hidden_sizes": [128, 128],
@@ -73,7 +74,7 @@ env_configs: dict[str, Config] = {
             epochs=10,
             pi_lr=3e-3,
             q_lr=3e-3,
-            act_noise=0.0,
+            act_noise=0.1,
             p_objectives=-4.0,
         )
     ),
