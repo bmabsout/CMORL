@@ -45,7 +45,7 @@ env_configs: dict[str, Config] = {
         HyperParams(env_args={"use_contact_forces": True}, epochs=100, act_noise=0.05),
     ),
     "Hopper-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.7),
+        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.3),
         # None,
         HyperParams(
             # ac_kwargs = {
@@ -89,6 +89,7 @@ env_configs: dict[str, Config] = {
             },
             epochs=30,
             p_objectives=-1.0,
+            act_noise=0.05,
         ),
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),

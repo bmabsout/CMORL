@@ -96,7 +96,7 @@ def default_hypers():
         p_objectives    = -1.0,
         q_batch         = 2.0,
         q_objectives    = 1.0,
-        qd_power        = 2.0,
+        qd_power        = 0.5,
         env_args        = {}
     )
 

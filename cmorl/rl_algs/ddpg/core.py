@@ -90,7 +90,7 @@ class CriticActivation(Activation):
     def __init__(self, **kwargs):
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: x, **kwargs)
+        super().__init__(activation=lambda x: tf.abs(tf.tanh(x*3.5)), **kwargs)
 
 def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer, seed=42, push_strength=1e-3):
     inputs = Input([obs_space.shape[0]])
@@ -131,7 +131,7 @@ def critic(
     )
 
     # # name the layer before sigmoid
-    before_clip = RescalingFixed(0.5, 0.5)(outputs)
+    before_clip = RescalingFixed(1.0, 0.0)(outputs)
 
     normed = CriticActivation()(before_clip)
     model = keras.Model(inputs, normed)

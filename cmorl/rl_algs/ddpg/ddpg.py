@@ -228,7 +228,7 @@ def ddpg(
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones, estimated_values):
         pi_targ = pi_targ_network(obs2)
-        q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["before_clip"]
+        q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["q"]
         batch_size = tf.shape(dones)[0]
         normalization_factor = (1.0 - hp.gamma)
         broadcasted_dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
@@ -239,14 +239,14 @@ def ddpg(
             q, before_clip = outputs["q"], outputs["before_clip"]
 
             keep_in_range = p_mean(
-                move_towards_range(before_clip, 0.0, 1.0), p=1.0
+                move_towards_range(before_clip, -1.0, 1.0), p=1.0
             )
-            td0_error = (before_clip - backup)
+            td0_error = (q - backup)
             estimated_tdinf_error = (q - estimated_values)
-            q_bellman_c = tf.reduce_mean(td0_error**2.0)
-            q_direct_c = tf.reduce_mean(estimated_tdinf_error**2.0)
+            q_bellman_c = tf.reduce_mean(tf.abs(td0_error))
+            q_direct_c = tf.reduce_mean(tf.abs(estimated_tdinf_error))
 
-            q_loss = q_bellman_c + q_direct_c*hp.qd_power #- keep_in_range*10.0
+            q_loss = q_bellman_c + q_direct_c*hp.qd_power - keep_in_range
             # q_loss = tf.reduce_mean(td0_error**2.0 + hp.qd_power*estimated_tdinf_error**2.0)
             # tf.print("","before_clip_min", np_const_width(1.0 - p_mean(1.0 - outputs["before_before_clip"], p=20.0, axis=0)), "\n"
             # , "before_clip_max", np_const_width(p_mean(outputs["before_before_clip"], p=20.0, axis=0)), "\n"

@@ -11,7 +11,7 @@ from gymnasium.envs.mujoco.mujoco_env import MujocoEnv
 from envs.Bittle.opencat_gym_env import OpenCatGymEnv
 
 def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: MujocoEnv, speed_multiplier=1.0):
-    action = (1.0 - transition.action**2.0)
+    action = (1.0 - tf.abs(transition.action))
     if not hasattr(env, "prev_xpos"):
         env.prev_xpos = np.copy(env.data.xpos) # type: ignore
     x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
@@ -24,11 +24,11 @@ def mujoco_CMORL(num_actions, speed_multiplier=1.0):
     @tf.function
     def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
-        speed = weaken(p_mean(qs_c[0:-num_actions], p=p_objectives),2)
-        action = p_mean(qs_c[-num_actions:], p=p_objectives)
+        speed = p_mean(qs_c[0:-num_actions], p=p_objectives)
+        action = weaken(p_mean(qs_c[-num_actions:], p=p_objectives),2)
         # q_c = then(forward, action, slack=0.5) 
         # q_c = forward
-        q_c = p_mean([speed, action], p=p_objectives)
+        q_c = p_mean([speed, action], p=0.0)
         return tf.stack([speed, action]), q_c
     return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=speed_multiplier), mujoco_composer)
 
