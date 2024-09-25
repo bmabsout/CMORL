@@ -11,7 +11,7 @@ from gymnasium.envs.mujoco.mujoco_env import MujocoEnv
 from envs.Bittle.opencat_gym_env import OpenCatGymEnv
 
 def mujoco_multi_dim_reward_joints_x_velocity(transition: Transition, env: MujocoEnv, speed_multiplier=1.0):
-    action = (1.0 - tf.abs(transition.action))
+    action = (1.0 - tf.abs(transition.action)**2.0)
     if not hasattr(env, "prev_xpos"):
         env.prev_xpos = np.copy(env.data.xpos) # type: ignore
     x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
@@ -25,10 +25,10 @@ def mujoco_CMORL(num_actions, speed_multiplier=1.0):
     def mujoco_composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
         speed = p_mean(qs_c[0:-num_actions], p=p_objectives)
-        action = weaken(p_mean(qs_c[-num_actions:], p=p_objectives),2)
+        action = p_mean(qs_c[-num_actions:], p=p_objectives)
         # q_c = then(forward, action, slack=0.5) 
         # q_c = forward
-        q_c = p_mean([speed, action], p=0.0)
+        q_c = p_mean([speed, action], p=p_objectives)
         return tf.stack([speed, action]), q_c
     return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=speed_multiplier), mujoco_composer)
 
@@ -40,18 +40,18 @@ def halfcheetah_CMORL():
             env.prev_xpos = np.copy(env.data.xpos) # type: ignore
         x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
         env.prev_xpos = np.copy(env.data.xpos) # type: ignore
-        speed = x_velocities[1:, 0]
-        # slow = np.clip(speed, 0.0, 1.0)
+        speed = np.mean(x_velocities[1:, 0])
+        slow = np.clip(speed, 0.0, 1.0)
         fast = np.clip(speed*0.2, 0.0, 1.0)
-        return np.hstack([fast, action])
+        return np.hstack([slow, fast, action])
     @tf.function
     def composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
-        # slow = qs_c[0]
-        fast = p_mean(qs_c[0:-num_actions], p=p_objectives)
+        slow = qs_c[0]
+        fast = qs_c[1]
         action = p_mean(qs_c[-num_actions:], p=p_objectives)
-        q_c = p_mean([fast, action], p=1.0)
-        return tf.stack([fast, action]), q_c
+        q_c = curriculum([slow, action, fast], p=0.5)
+        return tf.stack([slow, fast, action]), q_c
     return CMORL(reward, composer)
 
 
@@ -128,8 +128,8 @@ def lander_composer(q_values, p_batch=0, p_objectives=-4.0):
     qs_c = p_mean(q_values, p=p_batch, axis=0)
     nearness=clip_to(qs_c[0], 0.0, 0.7)
     very_nearness = clip_to(qs_c[1], 0.0, 0.2)
-    legs_touch = clip_to(p_mean(qs_c[4:6], p=2.0), 0.0, 0.4)
-    fuel_cost = p_mean(qs_c[2:4], p=1.0)
+    legs_touch = clip_to(p_mean(qs_c[4:6], p=2.0), 0.0, 0.7)
+    fuel_cost = clip_to(p_mean(qs_c[2:4], p=1.0), 0.0, 0.5)
     q_c = curriculum((nearness, very_nearness, legs_touch, fuel_cost), p=p_objectives)
     # q_c = then(land, fuel_cost)
     return tf.concat([qs_c, [nearness, very_nearness, legs_touch, fuel_cost]],axis=0), q_c #(1.0 - (1.0 - q_c)**2.0)
