@@ -56,7 +56,10 @@ descriptions: dict[str,  str] = {
     "p_batch": "The p-value for composing the Q-values across the batch",
     "p_objectives": "The p-value for composing the Q-values across the objectives",
     "q_batch": "The p-mean value for critic error's batch",
-    "q_objectives": "The p-mean value for composing the different critic's q-value errors"
+    "q_objectives": "The p-mean value for composing the different critic's q-value errors",
+    "qd_power": "The weight of the td-inf loss",
+    "threshold": "The threshold for the loss to keep the actions in range",
+    "before_clip": "The loss weight for the clip loss",
 }
 
 abbreviations = {

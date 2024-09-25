@@ -69,7 +69,8 @@ env_configs: dict[str, Config] = {
                 "critic_hidden_sizes": [400, 300],
                 "actor_hidden_sizes": [32, 32],
             },
-            threshold = 0.5
+            # pi_lr=3e-4,
+            threshold = 1.0
         ),
     ),
     "Pendulum-v1": Config(

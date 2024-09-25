@@ -267,14 +267,14 @@ def ddpg(
         with tf.GradientTape() as tape:
             outputs = pi_and_before_clip(obs1)
             pi, before_clip = outputs["pi"], outputs["before_clip"]
-            before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=0.0)
+            before_clip_c = p_mean(move_towards_range(before_clip, -hp.threshold, hp.threshold), p=0.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
             qs_c, q_c = q_composer(q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives)
             # qs_c = tf.expand_dims(q_c, 0)
-            all_c = p_mean([q_c, scale_gradient(before_clip_c, 0.01)], p=0.0)
-            # pi_loss = 1.0 - all_c
+            all_c = p_mean([q_c, scale_gradient(before_clip_c, hp.before_clip)], p=0.0)
+            pi_loss = 1.0 - all_c
             # all_c = q_c
-            pi_loss = -q_c + hp.before_clip*p_mean(tf.where(before_clip > hp.threshold, before_clip, tf.where(before_clip < -hp.threshold, -before_clip, 0.0)), p=2.0)
+            # pi_loss = -q_c + hp.before_clip*p_mean(tf.where(before_clip > hp.threshold, before_clip, tf.where(before_clip < -hp.threshold, -before_clip, 0.0)), p=2.0)
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if any(tf.reduce_any(tf.math.is_nan(grad)) for grad in grads):
         #     tf.print(q_values)
