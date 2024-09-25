@@ -16,6 +16,7 @@ def parse_args(args=None):
     parser.add_argument("-env", "--env_name", type=str, default=None)
     parser.add_argument("-n", "--num_tests", type=int, default=6)
     parser.add_argument("-f", "--force_truncate_at", type=int, default=None)
+    parser.add_argument("-a", "--act_noise", type=float, default=0.0)
     return parser.parse_args(args)
 
 

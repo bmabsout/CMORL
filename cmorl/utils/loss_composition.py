@@ -43,8 +43,16 @@ def clip_preserve_grads(val, min, max):
     clip_t = tf.clip_by_value(val, min, max)
     return val + tf.stop_gradient(clip_t - val)
 
+@tf.custom_gradient
+def clip_keep_in_range(val, min, max, push_strength):
+    clip_t = tf.clip_by_value(val, min, max)
+    def grad(dy):
+        push_to_range = tf.where(val > max, dy+push_strength, tf.where(val < min, dy-push_strength, dy))
+        return push_to_range, None, None, None
+    return clip_t, grad
+
 @tf.function
-def p_mean(l: tf.Tensor, p: float, slack=1e-12, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
+def p_mean(l: tf.Tensor, p: float, slack=1e-7, default_val=0.0, axis=None, dtype=None) -> tf.Tensor:
     """
     The Generalized mean
     l: a tensor of elements we would like to compute the p_mean with respect to, elements must be > 0.0
@@ -79,6 +87,10 @@ def simple_p_mean(l: tf.Tensor, p: float, axis=0) -> tf.Tensor:
 # @tf.custom_gradient
 # def fixed_grad_p_mean(l, p: float, slack=1e-15, default_val=0.0, axis=None, dtype=tf.float64):
 #     return p_mean(l, p, slack, default_val, axis, dtype), lambda dy: dy * tf.ones_like(l), None, None, None
+
+@tf.function
+def inv_mean(l, p=0, axis=0):
+    return 1.0 - p_mean(1.0-tf.convert_to_tensor(l), p, axis=axis)
 
 @tf.function
 def p_to_min(l, p=0, q=0):
@@ -134,7 +146,7 @@ def move_towards_range(x, min, max):
     return 1.0 / tf.where(in_range, 1.0, tf.abs(normalized)**0.5), grad
 
 @tf.function
-def then(x, y, slack=0.1, p=-1.0):
+def then(x, y, slack=0.5, p=-1.0):
     slack = tf.cast(slack, x.dtype)
     min_p_mean = p_mean([0, slack], p=p)
     return (p_mean([x,slack+y*(1-slack)], p=p)-min_p_mean)/(1.0 - min_p_mean)
@@ -146,22 +158,26 @@ def curriculum(l, slack=0.1, p=-1.0):
 def weaken(x, weaken_by=5.0):
     return 1.0 - (1.0-x)**tf.cast(weaken_by, x.dtype)
 
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    with tf.GradientTape() as gt:
-        # samples = 100
-        # x = tf.Variable(tf.linspace(0.1, 1.0, samples)**5.0)
-        # randos = tf.broadcast_to(tf.expand_dims(np.random.rand(50)**5.0, 1), (50, samples))
-        # a = tf.concat([tf.cast(tf.expand_dims(x, 0), tf.float64), tf.cast(randos, tf.float64)], 0)
-        # y = p_mean(a, -10.0, axis=0)
-        # print(x.shape)
-        # print(y.shape)
-        x = tf.Variable(tf.linspace(-2.0, 2.0, 100))
-        y = move_towards_range(x, 0.0, 1.0)
+@tf.function
+def clip_to(val, min, max, to_min=0.0, to_max=1.0):
+    return tf.clip_by_value((val-min)/(max-min), 0.0, 1.0)*(to_max-to_min) + to_min
 
-    plt.plot(x, gt.gradient(y,x), label="grad")
-    plt.plot(x, y, label="y")
-    # plt.plot(x, np.min(a, axis=0), label="min")
-    # plt.plot(x, np.max(a, axis=0), label="max")
-    plt.legend()
-    plt.show()
+# if __name__ == "__main__":
+#     import matplotlib.pyplot as plt
+#     with tf.GradientTape() as gt:
+#         # samples = 100
+#         # x = tf.Variable(tf.linspace(0.1, 1.0, samples)**5.0)
+#         # randos = tf.broadcast_to(tf.expand_dims(np.random.rand(50)**5.0, 1), (50, samples))
+#         # a = tf.concat([tf.cast(tf.expand_dims(x, 0), tf.float64), tf.cast(randos, tf.float64)], 0)
+#         # y = p_mean(a, -10.0, axis=0)
+#         # print(x.shape)
+#         # print(y.shape)
+#         x = tf.Variable(tf.linspace(-2.0, 2.0, 100))
+#         y = move_towards_range(x, 0.0, 1.0)
+
+#     plt.plot(x, gt.gradient(y,x), label="grad")
+#     plt.plot(x, y, label="y")
+#     # plt.plot(x, np.min(a, axis=0), label="min")
+#     # plt.plot(x, np.max(a, axis=0), label="max")
+#     plt.legend()
+#     plt.show()

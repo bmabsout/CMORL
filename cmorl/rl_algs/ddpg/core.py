@@ -6,13 +6,13 @@ from gymnasium import spaces
 import keras
 import tensorflow as tf
 
-from cmorl.utils.loss_composition import clip_preserve_grads # type: ignore
+from cmorl.utils.loss_composition import clip_keep_in_range, clip_preserve_grads
 
 
 
 def mlp_functional(
     inputs,
-    hidden_sizes=(32,),
+    hidden_sizes=[32],
     activation="relu",
     use_bias=True,
     kernel_constraint=None,
@@ -64,18 +64,20 @@ class RescalingFixed(Rescaling):
 
 
 class ClipLayer(Activation):
-    def __init__(self, min, max, **kwargs):
+    def __init__(self, min, max, push_strength, **kwargs):
         self.min = min
         self.max = max
+        self.push_strength = push_strength
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: clip_preserve_grads(x, min, max), **kwargs)
+        super().__init__(activation=lambda x: tf.sigmoid(x*3.5)*(max-min) + min, **kwargs)
 
     def get_config(self):
         config = super().get_config()
         config.update({
             "min": self.min,
             "max": self.max,
+            "push_strength": self.push_strength
         })
         return config
 
@@ -84,13 +86,19 @@ class ClipLayer(Activation):
         return cls(**config)
 
 
-def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer, seed=42):
-    inputs = Input((obs_space.shape[0],))
+class CriticActivation(Activation):
+    def __init__(self, **kwargs):
+        if "activation" in kwargs:
+            del kwargs["activation"]
+        super().__init__(activation=lambda x: tf.tanh(x*3.5)**2.0, **kwargs)
+
+def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer, seed=42, push_strength=1e-3):
+    inputs = Input([obs_space.shape[0]])
     normalized_input = RescalingFixed(1./obs_normalizer)(inputs)
     # unscaled = unscale_by_space(inputs, obs_space)
     linear_output = mlp_functional(
         normalized_input,
-        hidden_sizes + (act_space.shape[0],),
+        hidden_sizes + [act_space.shape[0]],
         use_bias=True,
         output_activation=None,
         kernel_constraint=None,
@@ -98,7 +106,8 @@ def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normal
         seed=seed
     )
     # tanhed = Activation("tanh")(linear_output)
-    clipped = ClipLayer(-1.0, 1.0)(linear_output)
+    clipped = ClipLayer(-1.0, 1.0, push_strength)(linear_output)
+    # clipped = Lambda(lambda x: tf.tanh(x*3.5), output_shape=lambda o:o)(linear_output)
     # scaled = scale_by_space(normed, act_space)
     model = keras.Model(inputs, clipped)
     model.compile()
@@ -112,20 +121,20 @@ def critic(
     obs_normalizer,
     rwds_dim=1,
     seed=42,
+    push_strength=1e-3
 ):
     concated_normalizer = np.concatenate([obs_normalizer, np.ones(act_space.shape[0])])
-    inputs = Input((obs_space.shape[0] + act_space.shape[0],))
+    inputs = Input([obs_space.shape[0] + act_space.shape[0]])
     normalized_input = RescalingFixed(1. / concated_normalizer)(inputs)
     outputs = mlp_functional(
-        normalized_input, hidden_sizes + (rwds_dim,), output_activation=None, kernel_constraint=None, use_dropout=False, seed=seed, activation="relu"
+        normalized_input, hidden_sizes + [rwds_dim], output_activation=None, kernel_constraint=None, use_dropout=False, seed=seed, activation="relu"
     )
 
-    # name the layer before sigmoid
-    before_clip = Lambda(lambda x: x**2.0, name="before_clip", output_shape=lambda o:o)(outputs)
-    # before_clip =  RescalingFixed(1.0, offset=0.3, name="before_clip")(outputs)
+    # # name the layer before sigmoid
+    before_clip = RescalingFixed(1.0, 0.0)(outputs)
 
-    biased_normed = ClipLayer(0.0, 1.0)(before_clip)
-    model = keras.Model(inputs, biased_normed)
+    normed = CriticActivation()(before_clip)
+    model = keras.Model(inputs, normed)
     model.compile()
     return model
 
@@ -135,14 +144,16 @@ def mlp_actor_critic(
     act_space: spaces.Box,
     rwds_dim: int,
     obs_normalizer=None,
-    actor_hidden_sizes=(32, 32),
-    critic_hidden_sizes=(400, 300),
+    actor_hidden_sizes=[32, 32],
+    critic_hidden_sizes=[400, 300],
+    actor_keep_in_range=1e-3,
+    critic_keep_in_range=1e-3,
     seed=42
 ) -> tuple[Model, Model]:
     if obs_normalizer is None:
         obs_normalizer = np.zeros_like(obs_space.high) + 1.0
     obs_normalizer = np.array(obs_normalizer)
     return (
-        actor(obs_space, act_space, actor_hidden_sizes, obs_normalizer, seed=seed),
-        critic(obs_space, act_space, critic_hidden_sizes, obs_normalizer, rwds_dim, seed=seed),
+        actor(obs_space, act_space, actor_hidden_sizes, obs_normalizer, seed=seed, push_strength=actor_keep_in_range),
+        critic(obs_space, act_space, critic_hidden_sizes, obs_normalizer, rwds_dim, seed=seed, push_strength=critic_keep_in_range),
     )

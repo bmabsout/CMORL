@@ -30,6 +30,8 @@ class HyperParams(Namespace):
     q_objectives     : float
     p_objectives     : float
     qd_power         : float
+    threshold        : float
+    before_clip      : float
     env_args         : dict[str, object]
     # noise_schedule : tf.keras.optimizers.schedules.LearningRateSchedule
 
@@ -54,7 +56,10 @@ descriptions: dict[str,  str] = {
     "p_batch": "The p-value for composing the Q-values across the batch",
     "p_objectives": "The p-value for composing the Q-values across the objectives",
     "q_batch": "The p-mean value for critic error's batch",
-    "q_objectives": "The p-mean value for composing the different critic's q-value errors"
+    "q_objectives": "The p-mean value for composing the different critic's q-value errors",
+    "qd_power": "The weight of the td-inf loss",
+    "threshold": "The threshold for the loss to keep the actions in range",
+    "before_clip": "The loss weight for the clip loss",
 }
 
 abbreviations = {
@@ -72,12 +77,14 @@ abbreviations = {
 def default_hypers():
     return HyperParams(
         ac_kwargs       = {
-            "critic_hidden_sizes": (400, 300),
-            "actor_hidden_sizes": (32, 32),
+            "critic_hidden_sizes": [400, 300],
+            "actor_hidden_sizes": [32, 32],
+            "actor_keep_in_range": 1e-3,
+            "critic_keep_in_range": 1e-3,
         },
         prev_folder     = None,
         seed            = int(time.time() * 1e5) % int(1e6),
-        steps_per_epoch = 5000,
+        steps_per_epoch = 2000,
         epochs          = 100,
         replay_size     = int(1e5),
         gamma           = 0.99,
@@ -86,15 +93,17 @@ def default_hypers():
         q_lr            = 3e-3,
         batch_size      = 100,
         start_steps     = 1000,
-        act_noise       = 0.1,
+        act_noise       = 0.05,
         max_ep_len      = None,
         train_every     = 50,
         train_steps     = 50,
         p_batch         = 1.0,
-        p_objectives    = -4.0,
+        p_objectives    = -1.0,
         q_batch         = 1.0,
         q_objectives    = 1.0,
         qd_power        = 1.0,
+        before_clip     = 1e-2,
+        threshold       = 1.0,
         env_args        = {}
     )
 
@@ -113,7 +122,7 @@ def rl_alg_serializer(experiment_name=None):
             default=experiment_name,
             help="name of the experiment"
         ),
-        ignored={"experiment_name"}, # figure out a way to handle experiment_name, as it shouldn't be included int he x: part
+        ignored={"experiment_name"},
     )
 
 

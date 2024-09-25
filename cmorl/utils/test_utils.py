@@ -4,6 +4,7 @@ from cmorl.configs import ForcedTimeLimit
 from cmorl.rl_algs.ddpg.ddpg import add_noise_to_weights
 from cmorl.utils import save_utils
 import numpy as np
+import tensorflow as tf
 
 from cmorl.utils.reward_utils import CMORL, Transition, discounted_window, estimated_value_fn, values
 
@@ -30,7 +31,7 @@ def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmor
             cmorl_r = cmorl(transition, env)
             cmorl_rs.append(cmorl_r)
         if d or t or max_ep_len == len(os):
-            print("done" if d else "truncated")
+            print(f"ep_len: {len(os)}", 'done' if d else 'truncated')
             break
         o = o2
         if render:
@@ -41,33 +42,33 @@ def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmor
     cmorl_rs = np.array(cmorl_rs)
     qs = np.array(critic(os, actions))
     np.set_printoptions(precision=2)
-    print("ep len:", len(os))
     rsum = np.sum(rs)
-    print("reward sum:", rsum)
-    print("cmorl sum:", np.sum(cmorl_rs, axis=0))
+    print(f"reward: {rsum:.2f}, cmorl: {np.sum(cmorl_rs, axis=0)}")
     estimated_value = estimated_value_fn(cmorl_rs, gamma, done=d)
-    print(f"estimated avg value (gamma ${gamma}):", estimated_value)
-    print("check:", np.mean(values(cmorl_rs, gamma, done=d), axis=0))
-    print("mean q:", np.mean(qs, axis=0))
-    print("first:", qs[0], np.sum(discounted_window(rs, gamma, done=d,axis=0)))
-    print("last:", qs[-1])
-    print("max:", np.max(qs, axis=0))
-    print("min:", np.min(qs, axis=0))
+    # print(f"estimated value:", estimated_value)
     vals = values(cmorl_rs, gamma, done=d)
-    print("offness:", np.mean(np.abs(qs - vals), axis=0))
+    offness = np.mean(np.abs(qs - vals), axis=0)
+    vals_and_errors = " ".join([f"{val:.2f}+{error:.2f}" for val, error in zip(estimated_value, offness)])
+    print("vals+err:", vals_and_errors)
+    qs_c, q_c = cmorl.q_composer(vals)
+    print("q_c:", np.asarray(q_c).round(2), "qs_c:", np.asarray(qs_c).round(2))
+    # print("first:", qs[0], np.sum(discounted_window(rs, gamma, done=d,axis=0)))
+    # print("last:", qs[-1])
+    # print("max:", np.max(qs, axis=0))
+    # print("min:", np.min(qs, axis=0))
     return os, rs, cmorl_rs, rsum, vals
 
 
-def folder_to_results(env, render, num_tests, folder_path, force_truncate_at=None, cmorl=None, max_ep_len=None, **kwargs):
+def folder_to_results(env, render, num_tests, folder_path, force_truncate_at=None, cmorl=None, max_ep_len=None, act_noise=0.0, **kwargs):
     saved_actor = save_utils.load_actor(folder_path)
     saved_critic = save_utils.load_critic(folder_path)
 
     def actor(x, np_random):
-        return add_noise_to_weights(x, saved_actor, env.action_space, 0.0, np_random)
+        return add_noise_to_weights(x, saved_actor, env.action_space, act_noise, np_random)
     def critic(o, a):
         return saved_critic(np.hstack([o, a], dtype=np.float32))
     runs = [
-        test(actor, critic, env, seed=17 + i, render=render, force_truncate_at=force_truncate_at, cmorl=cmorl, max_ep_len=max_ep_len)
+        test(actor, critic, env, seed=17 + i, render=render, force_truncate_at=force_truncate_at, cmorl=cmorl,max_ep_len=max_ep_len)
         for i in range(num_tests)
     ]
     return runs

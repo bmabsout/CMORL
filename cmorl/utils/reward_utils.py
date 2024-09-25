@@ -62,8 +62,8 @@ def estimated_value_fn(rewards, gamma, done=True, normalize=True, axis=0):
 def default_q_composer(q_values, p_batch=0, p_objectives=-4.0, scalarize_batch_first=True):
     qs_c = p_mean(q_values,
                   p=p_batch if scalarize_batch_first else p_objectives,
-                  axis=0 if scalarize_batch_first else 1)
-    q_c = p_mean(qs_c, p=p_objectives if scalarize_batch_first else p_batch)
+                  axis=0 if scalarize_batch_first else 1, slack=1e-7)
+    q_c = p_mean(qs_c, p=p_objectives if scalarize_batch_first else p_batch, slack=1e-7)
     return qs_c, q_c
 
 
@@ -85,6 +85,15 @@ class CMORL:
             return gym.spaces.Box(low=0.0, high=1.0, shape=[self.shape])
         example_rw = self.reward_fn(random_transition(env), env)
         return gym.spaces.Box(low = 0.0, high=1.0, shape=example_rw.shape, dtype=example_rw.dtype) 
+
+    def with_reward_fn(self, reward_fn):
+        return CMORL(reward_fn, self.q_composer, self.shape, self.randomization_schedule)
+
+    def with_q_composer(self, q_composer):
+        return CMORL(self.reward_fn, q_composer, self.shape, self.randomization_schedule)
+
+    def with_randomization_schedule(self, randomization_schedule):
+        return CMORL(self.reward_fn, self.q_composer, self.shape, randomization_schedule)
 
     def __call__(self, transition: Transition, env: gym.Env):
         return self.reward_fn(transition, env)

@@ -2,11 +2,13 @@ from functools import partial
 from typing import Callable
 
 import gymnasium
-from gymnasium.wrappers import TimeLimit
+from gymnasium.wrappers.time_limit import TimeLimit
+import numpy as np
 
 from cmorl.rl_algs.ddpg.hyperparams import HyperParams, combine, default_hypers
 from cmorl.utils.reward_utils import CMORL, perf_schedule
 from cmorl import reward_fns
+from envs import Boids
 
 class Config:
     def __init__(self, cmorl: CMORL | None = None, hypers: HyperParams = HyperParams(), wrapper = gymnasium.Wrapper):
@@ -35,28 +37,55 @@ env_configs: dict[str, Config] = {
             ac_kwargs={
                 "obs_normalizer": [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 4.0, 4.0, 2.0, 2.0, 2.0],
             },
+            threshold = 0.3,
+            before_clip = 1.0
         ),
         wrapper=partial(ForcedTimeLimit, max_episode_steps=200),
     ),
     "Ant-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=8),
-        HyperParams(env_args={"use_contact_forces": True}, epochs=100),
+        reward_fns.mujoco_CMORL(num_actions=8, speed_multiplier=0.5),
+        HyperParams(env_args={"use_contact_forces": True}, epochs=100, act_noise=0.05),
     ),
     "Hopper-v4": Config(
-        reward_fns.mujoco_CMORL(speed_multiplier=0.5, num_actions=3),
-        HyperParams(epochs=60, act_noise=0.1),
+        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.5),
+        # None,
+        HyperParams(
+            ac_kwargs = {
+                "critic_hidden_sizes": [400, 300],
+            #     "critic_hidden_sizes": [512, 512],
+                "actor_hidden_sizes": [32,32],
+            },
+            epochs=20,
+            p_objectives=-1.0,
+            threshold=1.5,
+        ),
     ),
     "HalfCheetah-v4": Config(
-        reward_fns.mujoco_CMORL(speed_multiplier=0.15, num_actions=6),
-        HyperParams(epochs=200, act_noise=0.05),
+        reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.25),
+        # reward_fns.halfcheetah_CMORL(),
+
+        HyperParams(epochs=200, act_noise=0.05, p_objectives=1.0,
+            ac_kwargs={
+                "critic_hidden_sizes": [400, 300],
+                "actor_hidden_sizes": [32, 32],
+            },
+            # pi_lr=3e-4,
+            threshold = 1.0
+        ),
     ),
     "Pendulum-v1": Config(
         CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
+        # None,
         HyperParams(
             ac_kwargs = {
-                "critic_hidden_sizes": (128, 128),
-                "actor_hidden_sizes": (32, 32),
+                "critic_hidden_sizes": [128, 128, 128],
+                "actor_hidden_sizes": [32, 32, 32],
             },
+            epochs=10,
+            pi_lr=3e-3,
+            q_lr=3e-3,
+            act_noise=0.1,
+            p_objectives=-4.0,
         )
     ),
     "Pendulum-custom": Config(
@@ -67,9 +96,11 @@ env_configs: dict[str, Config] = {
         HyperParams(
             ac_kwargs={
                 "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high,
+                "critic_hidden_sizes": [400, 300],
+                # "actor_hidden_sizes": [32, 32],
             },
             epochs=30,
-            p_objectives=-1.0,
+            p_objectives=0.0,
         ),
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),
@@ -80,6 +111,12 @@ env_configs: dict[str, Config] = {
             env_args={"observe_joints": True},
             # qd_power=0.5
         ),
+    ),
+    "Boids-v0": Config(
+        CMORL(Boids.multi_dim_reward, randomization_schedule=perf_schedule),
+        HyperParams(
+            max_ep_len=400,
+        )
     ),
 }
 

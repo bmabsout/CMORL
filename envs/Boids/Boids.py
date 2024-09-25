@@ -8,7 +8,7 @@ from gymnasium.error import DependencyNotInstalled
 
 import tensorflow as tf
 from cmorl.utils.loss_composition import p_mean
-from cmorl.utils.reward_utils import CMORL, RewardFnType
+from cmorl.utils.reward_utils import CMORL, RewardFnType, Transition
 from .toroid_utils import toroidal_distance, toroidal_pairwise_dist
 
 @tf.function
@@ -27,7 +27,7 @@ def composed_reward_fn(flat_state, flat_u, env: "BoidsEnv"):
     return 0.0
 
 @tf.function
-def convert_state_to_dict(flat_state: tf.Tensor, numBoids: int):
+def convert_state_to_dict(flat_state: tf.Tensor, numBoids: int) -> dict[str, tf.Tensor]:
     state = tf.transpose(tf.reshape(flat_state, (numBoids, 4)))
     return {"pos": state[:2], "vel": state[2:]}
 
@@ -36,9 +36,9 @@ def convert_action_to_dict(flat_u: tf.Tensor, numBoids: int):
     u = tf.transpose(tf.reshape(flat_u, (numBoids, 2)))
     return {"setpoint_vel_mag": u[0], "angle_change": u[1]}
 
-def multi_dim_reward(flat_state, flat_u, env: "BoidsEnv"):
-    state = convert_state_to_dict(flat_state, env.numBoids)
-    action = convert_action_to_dict(flat_u, env.numBoids)
+def multi_dim_reward(transition: Transition, env: "BoidsEnv"):
+    state: dict[str, tf.Tensor] = convert_state_to_dict(transition.next_state, env.numBoids)
+    action: dict[str, tf.Tensor] = convert_action_to_dict(transition.action, env.numBoids)
     go_fast = tf.norm(state["vel"], axis=0)/env.max_speed
     max_toroidal_distance = (0.5**2.0 + 0.5**2.0)**0.5 # toroidal distance means at worst we are (0.5, 0.5) away
     dists = flatten_upper_triangle(toroidal_pairwise_dist(state["pos"], state["pos"]))/ max_toroidal_distance
@@ -86,7 +86,6 @@ class BoidsEnv(gym.Env):
         numBoids: int = 5,
         max_speed = 1.0,
         max_angular_speed = 360.0*np.pi/180.0, # rads/s
-        reward_fn: RewardFnType = multi_dim_reward,
     ):
         self.max_speed = max_speed
         self.numBoids = numBoids
@@ -117,19 +116,13 @@ class BoidsEnv(gym.Env):
             dtype=np.float32
         )
 
-        reward_dim = reward_fn(
-            self.observation_space.sample(), self.action_space.sample(), self
-        ).shape[0]
-        self.cmorl = CMORL(reward_dim, reward_fn, q_composer)
-
     def get_obs(self):
         return self.state
 
 
-    def step(self, u):
-        self.state = difference_eq(self.state, u, self.numBoids, self.dt, self.max_speed)
-        reward = self.cmorl(self.state, u, self)
-        return self.get_obs(), reward, False, False, {}
+    def step(self, action):
+        self.state = difference_eq(self.state, action, self.numBoids, self.dt, self.max_speed)
+        return self.get_obs(), 0.0, False, False, {}
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
@@ -205,15 +198,6 @@ class BoidsEnv(gym.Env):
             pygame.display.quit()
             pygame.quit()
             self.isopen = False
-
-
-
-
-@tf.function
-def q_composer(q_values):
-    qs_c = p_mean(q_values, p=0.0, axis=0)
-    q_c = p_mean(qs_c, p=-4.0)
-    return qs_c, q_c
 
 
 @tf.function

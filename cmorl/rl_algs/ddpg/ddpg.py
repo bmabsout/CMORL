@@ -19,10 +19,12 @@ from cmorl.utils import reward_utils
 from cmorl.utils.logx import TensorflowLogger
 from cmorl.utils.loss_composition import (
     geo,
+    inv_mean,
     move_towards_range,
     p_mean,
     scale_gradient,
     soft,
+    weaken,
 )
 
 def np_const_width(array):
@@ -225,35 +227,27 @@ def ddpg(
 
     @tf.function
     def q_update(obs1, obs2, acts, rews, dones, estimated_values):
+        pi_targ = pi_targ_network(obs2)
+        q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["q"]
+        batch_size = tf.shape(dones)[0]
+        normalization_factor = (1.0 - hp.gamma)
+        broadcasted_dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
+        backup = tf.stop_gradient(rews*normalization_factor + (1.0 - broadcasted_dones) * hp.gamma * q_pi_targ)
+        # soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
         with tf.GradientTape() as tape:
             outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
             q, before_clip = outputs["q"], outputs["before_clip"]
-            pi_targ = pi_targ_network(obs2)
-            q_pi_targ = q_targ_and_before_clip(tf.concat([obs2, pi_targ], axis=-1))["q"]
-            batch_size = tf.shape(dones)[0]
 
-            dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
-            normalization_factor = (1.0 - hp.gamma)
-            backup = tf.stop_gradient(rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_targ)
-            # soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
             keep_in_range = p_mean(
-                move_towards_range(before_clip, 0.0, 1.0), p=-1.0
+                move_towards_range(before_clip, -1.0, 1.0), p=1.0
             )
-            td0_error = tf.abs(q - backup)
-            estimated_tdinf_error = tf.abs(q - estimated_values)
-            q_bellman_c = p_mean(p_mean(1.0 - td0_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
-            q_direct_c = p_mean(p_mean(1.0 - estimated_tdinf_error, p=hp.q_batch, axis=0), p=hp.q_objectives)
-            with_reg = p_mean(tf.stack([
-                q_bellman_c,
-                q_direct_c**hp.qd_power,
-                keep_in_range
-            ]), p=0.0)
+            td0_error = (q - backup)
+            estimated_tdinf_error = (q - estimated_values)
+            q_bellman_c = p_mean(p_mean(td0_error, p=2.0, axis=0), p=1.0)
+            q_direct_c = p_mean(p_mean(estimated_tdinf_error,p=2.0, axis=0), p=1.0)
 
-            # tf.print(q_bellman_c)
-            # tf.print(with_reg)
-            # tf.print(before_clip)
-            # q_loss = tf.sqrt(tf.reduce_mean(((outputs["before_clip"] - backup) ** 2)/estimated_std**2))
-            q_loss = 1.0 - with_reg
+            q_loss = q_bellman_c + q_direct_c*hp.qd_power - keep_in_range
+            # q_loss = tf.reduce_mean(td0_error**2.0 + hp.qd_power*estimated_tdinf_error**2.0)
             # tf.print("","before_clip_min", np_const_width(1.0 - p_mean(1.0 - outputs["before_before_clip"], p=20.0, axis=0)), "\n"
             # , "before_clip_max", np_const_width(p_mean(outputs["before_before_clip"], p=20.0, axis=0)), "\n"
             # , "q_min", np_const_width(1.0 - p_mean(1.0 - q, p=20.0, axis=0)), "\n"
@@ -266,30 +260,36 @@ def ddpg(
         grads = tape.gradient(q_loss, q_network.trainable_variables)
         grads_and_vars = zip(grads, q_network.trainable_variables)
         q_optimizer.apply_gradients(grads_and_vars)
-        return q_loss, q_bellman_c, keep_in_range
+        return q_loss, q_bellman_c, q_direct_c, keep_in_range
 
     @tf.function
     def pi_update(obs1, obs2, debug=False):
         with tf.GradientTape() as tape:
             outputs = pi_and_before_clip(obs1)
-            pi = outputs["pi"]
-            before_clip = outputs["before_clip"]
-            before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-1.0)
+            pi, before_clip = outputs["pi"], outputs["before_clip"]
+            before_clip_c = p_mean(move_towards_range(before_clip, -hp.threshold, hp.threshold), p=0.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
-            qs_c, q_c = q_composer(
-                q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives
-            )
-            all_c = p_mean([q_c, before_clip_c], p=0.0)
+            qs_c, q_c = q_composer(q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives)
+            # qs_c = tf.expand_dims(q_c, 0)
+            all_c = p_mean([q_c, scale_gradient(before_clip_c, hp.before_clip)], p=0.0)
             pi_loss = 1.0 - all_c
+            # all_c = q_c
+            # pi_loss = -q_c + hp.before_clip*p_mean(tf.where(before_clip > hp.threshold, before_clip, tf.where(before_clip < -hp.threshold, -before_clip, 0.0)), p=2.0)
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
+        # if any(tf.reduce_any(tf.math.is_nan(grad)) for grad in grads):
+        #     tf.print(q_values)
+        #     tf.print(pi)
+        #     breakpoint()
         # if debug:
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
 
-        grads_and_vars = zip(grads, pi_network.trainable_variables)
+        # gradient clipping
+        clipped = [tf.clip_by_norm(grad, 1.0) for grad in grads]
+        grads_and_vars = zip(clipped, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
         return all_c, qs_c, q_c, before_clip_c
 
-    def randomize_action(o, noise_scale, np_random: np.random.Generator = np.random):
+    def randomize_action(o, noise_scale, np_random: np.random.Generator):
         minus_1_to_1 = pi_network(tf.reshape(o, [1, -1])).numpy()[0]
         noise = noise_scale * np_random.normal(size=act_dim).astype(np.float32)
         a = (minus_1_to_1 + noise) * (
@@ -331,8 +331,8 @@ def ddpg(
     def ddpg_update():
         q_c = wandb.run.summary.get("Q-composed")
         learning_rate_reducer = (1.0 - q_c) if q_c else 1.0
-        pi_optimizer.learning_rate.assign(hp.pi_lr*learning_rate_reducer)
-        q_optimizer.learning_rate.assign(hp.q_lr*learning_rate_reducer)
+        pi_optimizer.learning_rate.assign(hp.pi_lr)
+        q_optimizer.learning_rate.assign(hp.q_lr)
         for train_step in range(hp.train_steps):
             batch = replay_buffer.sample_batch(hp.batch_size, np_random=np_random)
             obs1 = tf.constant(batch["obs1"])
@@ -342,13 +342,15 @@ def ddpg(
             dones = tf.constant(batch["done"])
             estimated_values = tf.constant(batch["estimated_values"])
             # Q-learning update
-            qloss, q_bellman_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones, estimated_values)
+            qloss, q_bellman_c, q_direct_c, q_before_clip_c = q_update(obs1, obs2, acts, rews, dones, estimated_values)
             logger.store(LossQ=qloss)
             weights_and_biases.log({"Q-Loss": qloss}, step=t)
             logger.store(Q_before_clip_c=1.0 - q_before_clip_c)
             logger.store(Q_bellman_c=1.0 - q_bellman_c)
+            logger.store(Q_direct_c=1.0 - q_direct_c)
             weights_and_biases.log({"Q-before_clip_c": 1.0 - q_before_clip_c}, step=t)
             weights_and_biases.log({"Q-bellman_c": 1.0 - q_bellman_c}, step=t)
+            weights_and_biases.log({"Q-direct_c": 1.0 - q_direct_c}, step=t)
             # Policy update
             (
                 all_c,
@@ -356,14 +358,14 @@ def ddpg(
                 q_c,
                 before_clip_c,
             ) = pi_update(obs1, obs2, (train_step + 1) % 20 == 0)
+            logger.store(actor_before_clip_c=1.0 - before_clip_c)
 
             qs_c = qs_c.numpy()
             logger.store(
                 Q_comp=q_c,
-                before_clip=before_clip_c,
             )
             weights_and_biases.log(
-                {"Q-composed": q_c, "before_clip": before_clip_c},
+                {"Q-composed": q_c, "before_clip": 1.0 - before_clip_c},
                 step=t
             )
             qs_dict_ = {}
@@ -392,7 +394,7 @@ def ddpg(
         use the learned policy (with some noise, via act_noise).
         """
         q_c = wandb.run.summary.get("Q-composed")
-        action = get_action(observations[-1], randomization_amount=cmorl.randomization_schedule(t, total_steps, q_c if q_c else 0.0))
+        action = get_action(observations[-1], randomization_amount=cmorl.randomization_schedule(t, total_steps, q_c if q_c else 0.0) if cmorl else 1.0)
         # action = get_action(observations[-1], lambda t: (1.0 - q_c) if q_c else 1.0) # randomize based on performance
         actions.append(action)
 
@@ -402,6 +404,8 @@ def ddpg(
 
         if cmorl:
             cmorl_rewards.append(cmorl(reward_utils.Transition(observations[-2], action, observations[-1], done, info), env))
+        else:
+            cmorl_rewards.append([reward])
 
         rewards.append(reward)
 
@@ -468,9 +472,11 @@ def ddpg(
             # logger.log_tabular("Qs", average_only=True)
             for i in range(qs_c.shape[0]):
                 logger.log_tabular(f"Q{i}", average_only=True)
+            logger.log_tabular("actor_before_clip_c", average_only=True)
             logger.log_tabular("Q_comp", average_only=True)
             logger.log_tabular("Q_before_clip_c", average_only=True)
             logger.log_tabular("Q_bellman_c", average_only=True)
+            logger.log_tabular("Q_direct_c", average_only=True)
             # logger.log_tabular("All", average_only=True)
             logger.log_tabular("LossQ", average_only=True)
             logger.dump_tabular(epoch)
