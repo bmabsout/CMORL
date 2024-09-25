@@ -37,6 +37,8 @@ env_configs: dict[str, Config] = {
             ac_kwargs={
                 "obs_normalizer": [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 4.0, 4.0, 2.0, 2.0, 2.0],
             },
+            threshold = 0.3,
+            before_clip = 1.0
         ),
         wrapper=partial(ForcedTimeLimit, max_episode_steps=200),
     ),
@@ -45,31 +47,38 @@ env_configs: dict[str, Config] = {
         HyperParams(env_args={"use_contact_forces": True}, epochs=100, act_noise=0.05),
     ),
     "Hopper-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.3),
+        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.5),
         # None,
         HyperParams(
-            # ac_kwargs = {
+            ac_kwargs = {
+                "critic_hidden_sizes": [400, 300],
             #     "critic_hidden_sizes": [512, 512],
-            #     "actor_hidden_sizes": [32, 32],
-            # },
+                "actor_hidden_sizes": [32,32],
+            },
             epochs=20,
-            act_noise=0.1,
             p_objectives=-1.0,
-            p_batch=1.0,
-            q_batch=1.0,
-            q_objectives=1.0),
+            threshold=1.5,
+        ),
     ),
     "HalfCheetah-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.1),
-        HyperParams(epochs=200, act_noise=0.0, p_objectives=0.0),
+        reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.25),
+        # reward_fns.halfcheetah_CMORL(),
+
+        HyperParams(epochs=200, act_noise=0.05, p_objectives=1.0,
+            ac_kwargs={
+                "critic_hidden_sizes": [400, 300],
+                "actor_hidden_sizes": [32, 32],
+            },
+            threshold = 0.5
+        ),
     ),
     "Pendulum-v1": Config(
-        # CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
-        None,
+        CMORL(partial(reward_fns.multi_dim_pendulum, setpoint=0.0)),
+        # None,
         HyperParams(
             ac_kwargs = {
-                "critic_hidden_sizes": [128, 128],
-                "actor_hidden_sizes": [32, 32],
+                "critic_hidden_sizes": [128, 128, 128],
+                "actor_hidden_sizes": [32, 32, 32],
             },
             epochs=10,
             pi_lr=3e-3,
@@ -86,10 +95,11 @@ env_configs: dict[str, Config] = {
         HyperParams(
             ac_kwargs={
                 "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high,
+                "critic_hidden_sizes": [400, 300],
+                # "actor_hidden_sizes": [32, 32],
             },
             epochs=30,
-            p_objectives=-1.0,
-            act_noise=0.05,
+            p_objectives=0.0,
         ),
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),

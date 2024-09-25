@@ -232,7 +232,7 @@ def ddpg(
         batch_size = tf.shape(dones)[0]
         normalization_factor = (1.0 - hp.gamma)
         broadcasted_dones = tf.broadcast_to(tf.expand_dims(dones, -1), (batch_size, rew_dims))
-        backup = rews*normalization_factor + (1.0 - broadcasted_dones) * hp.gamma * q_pi_targ
+        backup = tf.stop_gradient(rews*normalization_factor + (1.0 - broadcasted_dones) * hp.gamma * q_pi_targ)
         # soon_backup = rews*normalization_factor + (1.0 - dones) * hp.gamma * q_pi_later
         with tf.GradientTape() as tape:
             outputs = q_and_before_clip(tf.concat([obs1, acts], axis=-1))
@@ -243,8 +243,8 @@ def ddpg(
             )
             td0_error = (q - backup)
             estimated_tdinf_error = (q - estimated_values)
-            q_bellman_c = tf.reduce_mean(tf.abs(td0_error))
-            q_direct_c = tf.reduce_mean(tf.abs(estimated_tdinf_error))
+            q_bellman_c = p_mean(p_mean(td0_error, p=2.0, axis=0), p=1.0)
+            q_direct_c = p_mean(p_mean(estimated_tdinf_error,p=2.0, axis=0), p=1.0)
 
             q_loss = q_bellman_c + q_direct_c*hp.qd_power - keep_in_range
             # q_loss = tf.reduce_mean(td0_error**2.0 + hp.qd_power*estimated_tdinf_error**2.0)
@@ -267,13 +267,14 @@ def ddpg(
         with tf.GradientTape() as tape:
             outputs = pi_and_before_clip(obs1)
             pi, before_clip = outputs["pi"], outputs["before_clip"]
-            before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=-4.0)
+            before_clip_c = p_mean(move_towards_range(before_clip, -1.0, 1.0), p=0.0)
             q_values = q_network(tf.concat([obs1, pi], axis=-1))
             qs_c, q_c = q_composer(q_values, p_batch=hp.p_batch, p_objectives=hp.p_objectives)
             # qs_c = tf.expand_dims(q_c, 0)
-            # all_c = p_mean([q_c, before_clip_c], p=0.0)
-            all_c = q_c
-            pi_loss = -q_c + tf.reduce_mean(tf.where(before_clip > 1, before_clip, tf.where(before_clip < -1.0, -before_clip, 0.0))**2.0)
+            all_c = p_mean([q_c, scale_gradient(before_clip_c, 0.01)], p=0.0)
+            # pi_loss = 1.0 - all_c
+            # all_c = q_c
+            pi_loss = -q_c + hp.before_clip*p_mean(tf.where(before_clip > hp.threshold, before_clip, tf.where(before_clip < -hp.threshold, -before_clip, 0.0)), p=2.0)
         grads = tape.gradient(pi_loss, pi_network.trainable_variables)
         # if any(tf.reduce_any(tf.math.is_nan(grad)) for grad in grads):
         #     tf.print(q_values)
@@ -282,7 +283,9 @@ def ddpg(
         # if debug:
         #     tf.print(sum(map(lambda x: tf.reduce_mean(x**2.0), grads)))
 
-        grads_and_vars = zip(grads, pi_network.trainable_variables)
+        # gradient clipping
+        clipped = [tf.clip_by_norm(grad, 1.0) for grad in grads]
+        grads_and_vars = zip(clipped, pi_network.trainable_variables)
         pi_optimizer.apply_gradients(grads_and_vars)
         return all_c, qs_c, q_c, before_clip_c
 

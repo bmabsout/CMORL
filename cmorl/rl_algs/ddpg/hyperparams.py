@@ -30,6 +30,8 @@ class HyperParams(Namespace):
     q_objectives     : float
     p_objectives     : float
     qd_power         : float
+    threshold        : float
+    before_clip      : float
     env_args         : dict[str, object]
     # noise_schedule : tf.keras.optimizers.schedules.LearningRateSchedule
 
@@ -88,15 +90,17 @@ def default_hypers():
         q_lr            = 3e-3,
         batch_size      = 100,
         start_steps     = 1000,
-        act_noise       = 0.1,
+        act_noise       = 0.05,
         max_ep_len      = None,
         train_every     = 50,
         train_steps     = 50,
         p_batch         = 1.0,
         p_objectives    = -1.0,
-        q_batch         = 2.0,
+        q_batch         = 1.0,
         q_objectives    = 1.0,
-        qd_power        = 0.5,
+        qd_power        = 1.0,
+        before_clip     = 1e-2,
+        threshold       = 1.0,
         env_args        = {}
     )
 
