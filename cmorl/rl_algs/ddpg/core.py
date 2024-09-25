@@ -90,7 +90,7 @@ class CriticActivation(Activation):
     def __init__(self, **kwargs):
         if "activation" in kwargs:
             del kwargs["activation"]
-        super().__init__(activation=lambda x: tf.abs(tf.tanh(x*3.5)), **kwargs)
+        super().__init__(activation=lambda x: tf.tanh(x*3.5)**2.0, **kwargs)
 
 def actor(obs_space: spaces.Box, act_space: spaces.Box, hidden_sizes, obs_normalizer, seed=42, push_strength=1e-3):
     inputs = Input([obs_space.shape[0]])
