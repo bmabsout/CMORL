@@ -32,22 +32,30 @@ class ForcedTimeLimit(TimeLimit):
 
 env_configs: dict[str, Config] = {
     "Reacher-v4": Config(
-        CMORL(reward_fns.multi_dim_reacher),
+        reward_fns.reacher_cmorl,
         HyperParams(
             ac_kwargs={
                 "obs_normalizer": [1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 4.0, 4.0, 2.0, 2.0, 2.0],
             },
-            threshold = 0.3,
-            before_clip = 1.0
+            gamma = 0.9,
+            polyak = 0.9,
+            replay_size = 10000,
+            qd_power = 0.5,
+            p_batch = 0.5,
+            start_steps = 400,
+            act_noise = 0.01,
+            p_objectives = -2.0,
+            threshold = 2.0,
+            # before_clip = 1.0
         ),
-        wrapper=partial(ForcedTimeLimit, max_episode_steps=200),
+        # wrapper=partial(ForcedTimeLimit, max_episode_steps=200),
     ),
     "Ant-v4": Config(
         reward_fns.mujoco_CMORL(num_actions=8, speed_multiplier=0.5),
         HyperParams(env_args={"use_contact_forces": True}, epochs=100, act_noise=0.05),
     ),
     "Hopper-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.5),
+        reward_fns.mujoco_CMORL(num_actions=3, speed_multiplier=0.4),
         # None,
         HyperParams(
             ac_kwargs = {
@@ -57,20 +65,39 @@ env_configs: dict[str, Config] = {
             },
             epochs=20,
             p_objectives=-1.0,
+            act_noise = 0.1,
             threshold=1.5,
+            polyak=0.9,
+            replay_size=30000,
+        ),
+    ),
+    "Walker2d-v4": Config(
+        reward_fns.walker_CMORL(speed_multiplier=0.3),
+        # None,
+        HyperParams(
+            ac_kwargs = {
+                "critic_hidden_sizes": [400, 300],
+            #     "critic_hidden_sizes": [512, 512],
+                "actor_hidden_sizes": [32,32],
+            },
+            epochs=20,
+            p_objectives=0.0,
+            before_clip = 0.1,
+            act_noise = 0.02,
+            threshold=0.2,
         ),
     ),
     "HalfCheetah-v4": Config(
         reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.25),
         # reward_fns.halfcheetah_CMORL(),
 
-        HyperParams(epochs=200, act_noise=0.05, p_objectives=1.0,
+        HyperParams(epochs=200, act_noise=0.05, p_objectives=0.0,
             ac_kwargs={
                 "critic_hidden_sizes": [400, 300],
                 "actor_hidden_sizes": [32, 32],
             },
             # pi_lr=3e-4,
-            threshold = 1.0
+            threshold = 0.2
         ),
     ),
     "Pendulum-v1": Config(
@@ -78,8 +105,8 @@ env_configs: dict[str, Config] = {
         # None,
         HyperParams(
             ac_kwargs = {
-                "critic_hidden_sizes": [128, 128, 128],
-                "actor_hidden_sizes": [32, 32, 32],
+                "critic_hidden_sizes": [128, 128],
+                "actor_hidden_sizes": [16, 16],
             },
             epochs=10,
             pi_lr=3e-3,
@@ -101,6 +128,7 @@ env_configs: dict[str, Config] = {
             },
             epochs=30,
             p_objectives=0.0,
+            act_noise=0.05,
         ),
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),

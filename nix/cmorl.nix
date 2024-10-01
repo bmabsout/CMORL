@@ -11,6 +11,7 @@ buildPythonPackage rec {
     pygame
     pybullet
     matplotlib
+    multiprocess
     wandb
     gymnasium
     mujoco-py

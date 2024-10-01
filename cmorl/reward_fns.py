@@ -54,6 +54,18 @@ def halfcheetah_CMORL():
         return tf.stack([slow, fast, action]), q_c
     return CMORL(reward, composer)
 
+def walker_CMORL(speed_multiplier=0.5):
+    @tf.function
+    def walker_composer(q_values, p_batch=0, p_objectives=-4.0):
+        qs_c = p_mean(q_values, p=p_batch, axis=0)
+        speed = p_mean(qs_c[0:-6], p=0.0)
+        action = p_mean(qs_c[-6:], p=0.0)
+        # q_c = then(forward, action, slack=0.5) 
+        # q_c = forward
+        q_c = p_mean([speed, action], p=p_objectives)
+        return tf.stack([speed, action]), q_c
+    return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=speed_multiplier), walker_composer)
+
 
 def bittle_rw(transition: Transition, env: OpenCatGymEnv):
     action_rw = (1.0 - np.abs(transition.action))
@@ -70,12 +82,24 @@ def composed_reward_fn(transition, env):
     return reward
 
 def multi_dim_reacher(transition: Transition, env: ReacherEnv) -> np.ndarray:
-    reward_performance = 1.0 - np.clip(np.abs(transition.next_state[-3:-1])/0.1, 0.0, 1.0)
-    reward_actuation = 1 - np.abs(transition.action)
+    reward_performance = 1.0 - np.clip(np.abs(transition.next_state[-3:-1])/0.4, 0.0, 1.0)
+    reward_actuation = np.clip(1 - transition.action**2.0, 0.0, 1.0)
     # print(transition.next_state[-3:-1])
     # print("rw:", reward_performance)
     rw_vec = np.concatenate([reward_performance, reward_actuation], dtype=np.float32)
     return rw_vec
+
+@tf.function
+def reacher_composer(q_values, p_batch=0, p_objectives=-1.0):
+    qs_c = p_mean(q_values, p=p_batch, axis=0)
+    reach = p_mean(qs_c[:2], p=0.0) 
+    smoothness = p_mean(qs_c[2:], p=0.0)
+    q_c = p_mean([reach**2.0, smoothness], p=p_objectives)
+    return qs_c, q_c
+
+reacher_cmorl = CMORL(
+    multi_dim_reacher, reacher_composer 
+)
 
 def normed_angular_distance(a, b):
     diff = (b - a + np.pi) % (2 * np.pi) - np.pi

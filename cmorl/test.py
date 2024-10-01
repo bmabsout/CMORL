@@ -1,9 +1,8 @@
 import argparse
-import numpy as np
 from cmorl.utils import save_utils, test_utils
 from cmorl.configs import get_env_and_config
-import glob
 import envs # for the gym registrations
+import pickle
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
@@ -17,6 +16,7 @@ def parse_args(args=None):
     parser.add_argument("-n", "--num_tests", type=int, default=6)
     parser.add_argument("-f", "--force_truncate_at", type=int, default=None)
     parser.add_argument("-a", "--act_noise", type=float, default=0.0)
+    parser.add_argument("-s", "--store", type=str, default=None, help="store the results in a file")
     return parser.parse_args(args)
 
 
@@ -45,3 +45,7 @@ if __name__ == "__main__":
         # pretty print results
         for key, (mean, std) in results.items():
             print(f"\t{key}: {mean} +- {std}")
+
+    if cmd_args.store:
+        pickle.dump(run_groups, open(cmd_args.store, "wb"))
+        
