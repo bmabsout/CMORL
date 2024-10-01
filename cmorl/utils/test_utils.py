@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 
 from cmorl.utils.reward_utils import CMORL, Transition, discounted_window, estimated_value_fn, values
+import multiprocess as mp
 
 
 def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmorl=None, max_ep_len=None, gamma=0.99):
@@ -104,9 +105,13 @@ def folder_groups_from_globs(*globs: str):
 
 def run_folder_group_tests(env, cmd_args, folder_groups, cmorl=None, max_ep_len=None):
     group_results = {}
-    for folder_group_name, folders in folder_groups.items():
+    def run_folder_group(folder_group_name, folders):
         print("using folder group:", folder_group_name)
         run_stats = run_tests(env, cmd_args, folders=folders, cmorl=cmorl, max_ep_len=max_ep_len)
-            
-        group_results[folder_group_name] = run_stats
+        return folder_group_name, run_stats
+
+    with mp.Pool(processes=1 if cmd_args.render else 10) as pool:
+        results = pool.starmap(run_folder_group, folder_groups.items())
+
+    group_results = {folder_group_name: run_stats for folder_group_name, run_stats in results}
     return group_results
