@@ -34,25 +34,35 @@ def mujoco_CMORL(num_actions, speed_multiplier=1.0):
 
 def halfcheetah_CMORL():
     num_actions = 6
-    def reward(transition: Transition, env: MujocoEnv):
-        action = (1.0 - transition.action**2.0)
-        if not hasattr(env, "prev_xpos"):
-            env.prev_xpos = np.copy(env.data.xpos) # type: ignore
-        x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
-        env.prev_xpos = np.copy(env.data.xpos) # type: ignore
-        speed = np.mean(x_velocities[1:, 0])
-        slow = np.clip(speed, 0.0, 1.0)
-        fast = np.clip(speed*0.2, 0.0, 1.0)
-        return np.hstack([slow, fast, action])
+    # def reward(transition: Transition, env: MujocoEnv):
+    #     action = (1.0 - transition.action**2.0)
+    #     if not hasattr(env, "prev_xpos"):
+    #         env.prev_xpos = np.copy(env.data.xpos) # type: ignore
+    #     x_velocities = (env.data.xpos - env.prev_xpos) / env.dt # type: ignore
+    #     env.prev_xpos = np.copy(env.data.xpos) # type: ignore
+    #     speed = np.mean(x_velocities[1:, 0])
+    #     slow = np.clip(speed, 0.0, 1.0)
+    #     fast = np.clip(speed*0.2, 0.0, 1.0)
+    #     return np.hstack([slow, fast, action])
+    # @tf.function
+    # def composer(q_values, p_batch=0, p_objectives=-4.0):
+    #     qs_c = p_mean(q_values, p=p_batch, axis=0)
+    #     slow = qs_c[0]
+    #     fast = qs_c[1]
+    #     action = p_mean(qs_c[-num_actions:], p=p_objectives)
+    #     q_c = curriculum([slow, action, fast], p=0.5)
+    #     return tf.stack([slow, fast, action]), q_c
+
     @tf.function
     def composer(q_values, p_batch=0, p_objectives=-4.0):
         qs_c = p_mean(q_values, p=p_batch, axis=0)
-        slow = qs_c[0]
-        fast = qs_c[1]
-        action = p_mean(qs_c[-num_actions:], p=p_objectives)
-        q_c = curriculum([slow, action, fast], p=0.5)
-        return tf.stack([slow, fast, action]), q_c
-    return CMORL(reward, composer)
+        speed = p_mean(qs_c[0:-num_actions], p=0.0)
+        action = p_mean(qs_c[-num_actions:], p=0.0)
+        # q_c = then(forward, action, slack=0.5) 
+        # q_c = forward
+        q_c = p_mean([speed, action], p=p_objectives)
+        return tf.stack([speed, action]), q_c
+    return CMORL(partial(mujoco_multi_dim_reward_joints_x_velocity, speed_multiplier=0.25), composer)
 
 def walker_CMORL(speed_multiplier=0.5):
     @tf.function
@@ -129,20 +139,36 @@ def pendulum_composer(q_values, p_batch=0, p_objectives=-4.0):
     return qs_c, q_c
 
 
+def are_bodies_in_contact(world, body1, body2):
+    # Get the contact list from the world
+    for contact in world.contacts:
+        # Check if the contact involves both bodies
+        if (contact.fixtureA.body == body1 and contact.fixtureB.body == body2) or \
+           (contact.fixtureA.body == body2 and contact.fixtureB.body == body1):
+            # Ensure the contact is actually touching
+            if contact.touching:
+                return True
+    return False
+
 def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
-    nearness = 1.0 - np.clip(
-        np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
-    )
+    nearness = (1.0 - np.clip(
+        np.linalg.norm(transition.next_state[0:2]), 0.0, 1.5 # type: ignore
+    )/1.5)**2.0
     very_nearness = 1.0 - np.clip(
-        10*np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
+        3*np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
     )
     speed = transition.next_state[2:4] / env.observation_space.high[2:4] # type: ignore
-    minize_speed_near_ground = 1.0 - np.clip(np.linalg.norm(speed)*10.0, 0.0, 1.0)
-    legs = transition.next_state[6:8]*minize_speed_near_ground
+    minize_speed_near_ground = (1.0 - np.clip(np.linalg.norm(speed)*3.0, 0.0, 1.0))**2.0
+    legs_contact = np.array([are_bodies_in_contact(env.world, env.legs[0], env.moon), are_bodies_in_contact(env.world, env.legs[1], env.moon)]) # hack because the contacts don't work when the legs are asleep
+    # breakpoint()
+
+    legs = legs_contact*minize_speed_near_ground
+
+    # legs_contact = int(env.world.IsContacted(env.legs[0]))
     fuel_cost_bottom = 1.0 - ((transition.action[0]+1.0)/2.0)
     fuel_cost_lr = 1.0 - np.abs(transition.action[1])
     # return np.concatenate([[nearness**4.0, very_nearness**2.0], fuel_costs, legs])
-    return np.concatenate([[nearness, very_nearness], [fuel_cost_lr, fuel_cost_bottom], legs])
+    return np.concatenate([[nearness, very_nearness, fuel_cost_lr, fuel_cost_bottom], legs])
     # return np.concatenate([[nearness**4.0]])
     # return legs
 
@@ -150,20 +176,20 @@ def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
 @tf.function
 def lander_composer(q_values, p_batch=0, p_objectives=-4.0):
     qs_c = p_mean(q_values, p=p_batch, axis=0)
-    nearness=clip_to(qs_c[0], 0.0, 0.7)
-    very_nearness = clip_to(qs_c[1], 0.0, 0.2)
-    legs_touch = clip_to(p_mean(qs_c[4:6], p=2.0), 0.0, 0.7)
+    nearness=qs_c[0]
+    very_nearness=qs_c[1]
+    # very_nearness = clip_to(qs_c[1], 0.0, 0.2)
+    legs_touch = p_mean(qs_c[4:6], p=0.0)
     fuel_cost = clip_to(p_mean(qs_c[2:4], p=1.0), 0.0, 0.5)
-    q_c = curriculum((nearness, very_nearness, legs_touch, fuel_cost), p=p_objectives)
+    q_c = curriculum([nearness, very_nearness, legs_touch, fuel_cost], p=p_objectives)
     # q_c = then(land, fuel_cost)
-    return tf.concat([qs_c, [nearness, very_nearness, legs_touch, fuel_cost]],axis=0), q_c #(1.0 - (1.0 - q_c)**2.0)
+    return tf.concat([qs_c, [nearness, legs_touch, fuel_cost]], axis=0), q_c # weaken(q_c, 2.0)
 
 @tf.function
 def lander_composer2(q_values, p_batch=0, p_objectives=-4.0):
     qs_c = p_mean(q_values, p=p_batch, axis=0)
     nearness=qs_c[0]
-    very_nearness = qs_c[1]
-    legs_touch = p_mean(qs_c[4:6], p=2.0)
-    fuel_cost = p_mean(qs_c[2:4], p=1.0)
-    q_c = p_mean([nearness, very_nearness, legs_touch, fuel_cost], p=p_objectives)
-    return tf.concat([qs_c, [nearness, very_nearness, legs_touch]],axis=0), q_c
+    fuel_cost = p_mean(qs_c[1:3], p=1.0)
+    legs_touch = p_mean(qs_c[3:5], p=1.0)
+    q_c = p_mean([nearness, legs_touch, fuel_cost], p=p_objectives)
+    return tf.concat([qs_c, [nearness, legs_touch]],axis=0), q_c

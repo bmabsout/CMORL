@@ -10,7 +10,7 @@ from cmorl.utils.reward_utils import CMORL, Transition, discounted_window, estim
 import multiprocess as mp
 
 
-def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmorl=None, max_ep_len=None, gamma=0.99):
+def test(actor, critic, env, seed=1, render=True, force_truncate_at=None, cmorl=None, max_ep_len=None, gamma=0.99):
     if force_truncate_at is not None:
         env = ForcedTimeLimit(env, max_episode_steps=force_truncate_at)
     o, _ = env.reset(seed=seed)
@@ -110,8 +110,11 @@ def run_folder_group_tests(env, cmd_args, folder_groups, cmorl=None, max_ep_len=
         run_stats = run_tests(env, cmd_args, folders=folders, cmorl=cmorl, max_ep_len=max_ep_len)
         return folder_group_name, run_stats
 
-    with mp.Pool(processes=1 if cmd_args.render else 10) as pool:
-        results = pool.starmap(run_folder_group, folder_groups.items())
+    if cmd_args.render:
+        results = [run_folder_group(folder_group_name, folders) for folder_group_name, folders in folder_groups.items()]
+    else:
+        with mp.Pool(processes=10) as pool:
+            results = pool.starmap(run_folder_group, folder_groups.items())
 
     group_results = {folder_group_name: run_stats for folder_group_name, run_stats in results}
     return group_results

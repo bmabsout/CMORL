@@ -88,16 +88,16 @@ env_configs: dict[str, Config] = {
         ),
     ),
     "HalfCheetah-v4": Config(
-        reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.25),
-        # reward_fns.halfcheetah_CMORL(),
+        # reward_fns.mujoco_CMORL(num_actions=6, speed_multiplier=0.25),
+        reward_fns.halfcheetah_CMORL(),
 
-        HyperParams(epochs=200, act_noise=0.05, p_objectives=0.0,
+        HyperParams(epochs=200, act_noise=0.05, p_objectives=0.5,
             ac_kwargs={
                 "critic_hidden_sizes": [400, 300],
                 "actor_hidden_sizes": [32, 32],
             },
             # pi_lr=3e-4,
-            threshold = 0.2
+            # threshold = 0.5
         ),
     ),
     "Pendulum-v1": Config(
@@ -124,11 +124,19 @@ env_configs: dict[str, Config] = {
             ac_kwargs={
                 "obs_normalizer": gymnasium.make("LunarLanderContinuous-v2").observation_space.high,
                 "critic_hidden_sizes": [400, 300],
-                # "actor_hidden_sizes": [32, 32],
+                "actor_hidden_sizes": [32, 32],
             },
             epochs=30,
             p_objectives=0.0,
             act_noise=0.05,
+            # pi_lr=1e-3,
+            # q_lr = 1e-3,
+            p_batch= 1.0,
+            # replay_size=30000,
+            # polyak=0.9,
+            qd_power=0.75,
+            threshold=1.5,
+            # before_clip = 0.01
         ),
         wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
     ),

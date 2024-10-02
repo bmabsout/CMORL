@@ -151,7 +151,7 @@ def then(x, y, slack=0.5, p=-1.0):
     min_p_mean = p_mean([0, slack], p=p)
     return (p_mean([x,slack+y*(1-slack)], p=p)-min_p_mean)/(1.0 - min_p_mean)
 
-def curriculum(l, slack=0.1, p=-1.0):
+def curriculum(l, slack=0.1, p=0.0):
     return reduce(lambda x, y: then(y, x, slack=slack, p=p), reversed(l))
 
 @tf.function
