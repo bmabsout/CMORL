@@ -159,37 +159,36 @@ def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
     )
     speed = transition.next_state[2:4] / env.observation_space.high[2:4] # type: ignore
     minize_speed_near_ground = (1.0 - np.clip(np.linalg.norm(speed)*3.0, 0.0, 1.0))**2.0
-    legs_contact = np.array([are_bodies_in_contact(env.world, env.legs[0], env.moon), are_bodies_in_contact(env.world, env.legs[1], env.moon)]) # hack because the contacts don't work when the legs are asleep
-    # breakpoint()
+    legs_contact = np.array([are_bodies_in_contact(env.world, leg, env.moon) for leg in env.legs]) # hack because the contacts don't work when the legs are asleep
 
-    legs = legs_contact*minize_speed_near_ground
-
-    # legs_contact = int(env.world.IsContacted(env.legs[0]))
     fuel_cost_bottom = 1.0 - ((transition.action[0]+1.0)/2.0)
     fuel_cost_lr = 1.0 - np.abs(transition.action[1])
+    legs = legs_contact*fuel_cost_bottom*fuel_cost_lr
     # return np.concatenate([[nearness**4.0, very_nearness**2.0], fuel_costs, legs])
     return np.concatenate([[nearness, very_nearness, fuel_cost_lr, fuel_cost_bottom], legs])
-    # return np.concatenate([[nearness**4.0]])
-    # return legs
+
+
+@tf.function
+def clip_objectives(qs_c):
+    nearness=clip_to(qs_c[0], 0.0, 0.9)
+    very_nearness=clip_to(qs_c[1], 0.0, 0.7)
+    # very_nearness = clip_to(qs_c[1], 0.0, 0.2)
+    legs_touch = clip_to(p_mean(qs_c[4:6], p=0.0), 0.0, 0.5)
+    fuel_cost = clip_to(p_mean(qs_c[2:4], p=1.0), 0.0, 0.5)
+    return (nearness, very_nearness, legs_touch, fuel_cost)
 
 
 @tf.function
 def lander_composer(q_values, p_batch=0, p_objectives=-4.0):
     qs_c = p_mean(q_values, p=p_batch, axis=0)
-    nearness=qs_c[0]
-    very_nearness=qs_c[1]
-    # very_nearness = clip_to(qs_c[1], 0.0, 0.2)
-    legs_touch = p_mean(qs_c[4:6], p=0.0)
-    fuel_cost = clip_to(p_mean(qs_c[2:4], p=1.0), 0.0, 0.5)
+    (nearness, very_nearness, legs_touch, fuel_cost) = clip_objectives(qs_c)
     q_c = curriculum([nearness, very_nearness, legs_touch, fuel_cost], p=p_objectives)
     # q_c = then(land, fuel_cost)
-    return tf.concat([qs_c, [nearness, legs_touch, fuel_cost]], axis=0), q_c # weaken(q_c, 2.0)
+    return tf.concat([qs_c, [nearness, very_nearness, legs_touch, fuel_cost]], axis=0), q_c # weaken(q_c, 2.0)
 
 @tf.function
 def lander_composer2(q_values, p_batch=0, p_objectives=-4.0):
     qs_c = p_mean(q_values, p=p_batch, axis=0)
-    nearness=qs_c[0]
-    fuel_cost = p_mean(qs_c[1:3], p=1.0)
-    legs_touch = p_mean(qs_c[3:5], p=1.0)
-    q_c = p_mean([nearness, legs_touch, fuel_cost], p=p_objectives)
-    return tf.concat([qs_c, [nearness, legs_touch]],axis=0), q_c
+    (nearness, very_nearness, legs_touch, fuel_cost) = clip_objectives(qs_c)
+    q_c = p_mean([nearness, very_nearness, legs_touch, fuel_cost], p=p_objectives)
+    return tf.concat([qs_c, [nearness, very_nearness, legs_touch]],axis=0), q_c

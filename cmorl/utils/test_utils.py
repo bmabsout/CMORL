@@ -10,7 +10,7 @@ from cmorl.utils.reward_utils import CMORL, Transition, discounted_window, estim
 import multiprocess as mp
 
 
-def test(actor, critic, env, seed=1, render=True, force_truncate_at=None, cmorl=None, max_ep_len=None, gamma=0.99):
+def test(actor, critic, env, seed=123, render=True, force_truncate_at=None, cmorl=None, max_ep_len=None, gamma=0.99):
     if force_truncate_at is not None:
         env = ForcedTimeLimit(env, max_episode_steps=force_truncate_at)
     o, _ = env.reset(seed=seed)
