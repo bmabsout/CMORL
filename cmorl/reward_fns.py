@@ -151,30 +151,34 @@ def are_bodies_in_contact(world, body1, body2):
     return False
 
 def lunar_lander_rw(transition: Transition, env: LunarLander)  -> np.ndarray:
-    nearness = (1.0 - np.clip(
-        np.linalg.norm(transition.next_state[0:2]), 0.0, 1.5 # type: ignore
-    )/1.5)**2.0
-    very_nearness = 1.0 - np.clip(
-        3*np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0 # type: ignore
-    )
-    speed = transition.next_state[2:4] / env.observation_space.high[2:4] # type: ignore
-    minize_speed_near_ground = (1.0 - np.clip(np.linalg.norm(speed)*3.0, 0.0, 1.0))**2.0
-    legs_contact = np.array([are_bodies_in_contact(env.world, leg, env.moon) for leg in env.legs]) # hack because the contacts don't work when the legs are asleep
-
+    speed = transition.next_state[2:4] / env.observation_space.high[2:4]
+    legs_contact = transition.next_state[-2:]
     fuel_cost_bottom = 1.0 - ((transition.action[0]+1.0)/2.0)
     fuel_cost_lr = 1.0 - np.abs(transition.action[1])
-    legs = legs_contact*fuel_cost_bottom*fuel_cost_lr
+    fuel_cost = p_mean((
+        np.clip(fuel_cost_bottom*2.0 + 1.0, 0.0, 1.0),
+        np.clip(fuel_cost_lr*2.0 + 1.0, 0.0, 1.0)
+    ), p=0.0)
+    nearness = (1.0 - np.clip(
+        np.linalg.norm(transition.next_state[0:2]), 0.0, 1.5
+    )/1.5)**2.0
+    very_nearness = 1.0 - np.clip(
+        3*np.linalg.norm(transition.next_state[0:2]), 0.0, 1.0
+    )
+    land_stop = p_mean([(legs_contact[0] or legs_contact[1])*1.0, fuel_cost], p=0.0)
+
+    legs = p_mean(np.array([legs_contact, np.broadcast_to(fuel_cost, (2,))]), axis=0, p=0.5)
     # return np.concatenate([[nearness**4.0, very_nearness**2.0], fuel_costs, legs])
     return np.concatenate([[nearness, very_nearness, fuel_cost_lr, fuel_cost_bottom], legs])
-
 
 @tf.function
 def clip_objectives(qs_c):
     nearness=clip_to(qs_c[0], 0.0, 0.9)
     very_nearness=clip_to(qs_c[1], 0.0, 0.7)
     # very_nearness = clip_to(qs_c[1], 0.0, 0.2)
-    legs_touch = clip_to(p_mean(qs_c[4:6], p=0.0), 0.0, 0.5)
-    fuel_cost = clip_to(p_mean(qs_c[2:4], p=1.0), 0.0, 0.5)
+    fuel_cost = clip_to(p_mean(qs_c[2:4], p=1.0), 0.0, 0.8)
+    legs_touch = clip_to(p_mean(qs_c[4:6], p=0.0), 0.0, 0.7)**2.0
+    # land_stop = clip_to(qs_c[6], 0.0, 0.5)**2.0
     return (nearness, very_nearness, legs_touch, fuel_cost)
 
 

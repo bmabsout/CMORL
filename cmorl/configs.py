@@ -16,9 +16,22 @@ class Config:
         self.hypers = combine(default_hypers(), hypers)
         self.wrapper = wrapper
 
-class FixSleepingLander(gymnasium.Wrapper):
+class FixLander(gymnasium.Wrapper):
+    def are_bodies_in_contact(self, body1, body2):
+        # Get the contact list from the world
+        for contact in self.env.world.contacts:
+            # Check if the contact involves both bodies
+            if (contact.fixtureA.body == body1 and contact.fixtureB.body == body2) or \
+               (contact.fixtureA.body == body2 and contact.fixtureB.body == body1):
+                # Ensure the contact is actually touching
+                if contact.touching:
+                    return True
+        return False
+
     def step(self, action):
         obs, reward, done, truncated, info = self.env.step(action)
+        legs_contact = np.array([self.are_bodies_in_contact(leg, self.env.moon) for leg in self.env.legs]) # hack because the contacts don't work when the legs are asleep which affects our landed objective
+        obs[-2:] = legs_contact
         if not self.env.lander.awake:
             truncated = True
             done = False
@@ -128,17 +141,18 @@ env_configs: dict[str, Config] = {
             },
             epochs=30,
             p_objectives=-1.0,
-            act_noise=0.1,
+            act_noise=0.05,
             # pi_lr=1e-3,
             # q_lr = 1e-3,
             p_batch= 1.0,
+            start_steps=2000,
             # replay_size=30000,
-            # polyak=0.9,
-            qd_power=0.75,
+            polyak=0.9,
+            qd_power=0.5,
             threshold=1.5,
             # before_clip = 0.01
         ),
-        wrapper=lambda x: TimeLimit(FixSleepingLander(x), max_episode_steps=400),
+        wrapper=lambda x: TimeLimit(FixLander(x), max_episode_steps=400),
     ),
     "Bittle-custom": Config(
         CMORL(reward_fns.bittle_rw),
